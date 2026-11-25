@@ -271,6 +271,11 @@ mod tests {
         std::fs::copy(&original, &local).unwrap();
 
         let mut lab = Lab::start(d.path()).unwrap();
+        let lib = d.path().join("Library");
+        assert!(
+            matches!(lightcraft_catalog::LibraryLock::acquire(&lib, "second opener"), Err(lightcraft_catalog::lock::LockError::InUse(_))),
+            "the app must actually hold the catalogue lock while open"
+        );
         assert_eq!(lab.import(&json!({"paths":[original]})), Err("import"));
         assert_eq!(lab.import(&json!({"paths":[local]})).unwrap()["imported"], 1);
         let row = lab.list(&json!({"query":"FIXTURE"}));

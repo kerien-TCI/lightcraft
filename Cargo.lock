@@ -3972,6 +3972,7 @@ dependencies = [
  "chrono",
  "crc32fast",
  "dhat",
+ "fs4",
  "lightcraft-develop",
  "lightcraft-geom",
  "lightcraft-meta",

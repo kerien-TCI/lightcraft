@@ -6,11 +6,12 @@
 //! whichever wrote the last snapshot would silently drop the other's edits. So opening a library
 //! takes the lock first, and a second opener gets [`LockError::InUse`] instead.
 //!
-//! - The lock is the OS's (`flock` on Unix, `LockFileEx` on Windows, via [`std::fs::File::try_lock`]):
-//!   it is released explicitly when the [`LibraryLock`] is dropped and, after a crash or a kill, by
+//! - The lock is the OS's (`flock` on Unix, `LockFileEx` on Windows). Rust's file-lock APIs
+//!   do not implement it on Android, so that target uses the same kernel operation via `fs4`.
+//!   It is released explicitly when the [`LibraryLock`] is dropped and, after a crash or a kill, by
 //!   the OS when the process ends. A `catalog.lock` file left behind is therefore never "stale":
 //!   only a lock that's actually held refuses the open.
-//! - Dropping the lock calls [`std::fs::File::unlock`] rather than relying on the handle closing.
+//! - Dropping the lock explicitly unlocks rather than relying on the handle closing.
 //!   On Unix an `flock` lock belongs to the open file description and lasts while *any* descriptor
 //!   on it is open; a process that another thread is spawning holds a copy of every descriptor
 //!   (`O_CLOEXEC` only closes them at `execve`), so closing ours would leave the library "already
@@ -31,13 +32,39 @@
 //!   advisory and depend on the server; the owner file is then the only hint.
 //! - Browser storage (OPFS) has no file locks: see the web host for its own guard.
 
-use std::fs::{File, OpenOptions, TryLockError};
+#[cfg(not(target_os = "android"))]
+use std::fs::TryLockError;
+use std::fs::{File, OpenOptions};
 use std::hash::{BuildHasher, Hasher, RandomState};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[cfg(target_os = "android")]
+use fs4::TryLockError;
+
 use crate::opened_folder::OpenedFolder;
+
+// Keep the same lock file, contention and release semantics on every target.
+#[cfg(target_os = "android")]
+fn try_lock(file: &File) -> Result<(), TryLockError> {
+    fs4::FileExt::try_lock(file)
+}
+
+#[cfg(not(target_os = "android"))]
+fn try_lock(file: &File) -> Result<(), TryLockError> {
+    file.try_lock()
+}
+
+#[cfg(target_os = "android")]
+fn unlock(file: &File) -> io::Result<()> {
+    fs4::FileExt::unlock(file)
+}
+
+#[cfg(not(target_os = "android"))]
+fn unlock(file: &File) -> io::Result<()> {
+    file.unlock()
+}
 
 /// The lock file in the library directory.
 pub const LOCK: &str = "catalog.lock";
@@ -138,7 +165,7 @@ impl LibraryLock {
             Ok(f) => f,
             Err(e) => return Ok(unlocked(e)),
         };
-        match file.try_lock() {
+        match try_lock(&file) {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
                 let owner = std::fs::read(dir.join(OWNER)).ok().and_then(|b| serde_json::from_slice::<LockOwner>(&b).ok());
@@ -225,7 +252,7 @@ impl Drop for LibraryLock {
         if self.held {
             self.remove_own_note();
             if let Some(f) = &self.file
-                && let Err(e) = f.unlock()
+                && let Err(e) = unlock(f)
             {
                 log::warn!("library {}: can't release {LOCK}: {e}", self.dir.display());
             }

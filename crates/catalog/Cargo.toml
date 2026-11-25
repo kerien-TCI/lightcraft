@@ -20,6 +20,9 @@ log = { workspace = true }
 chrono = { workspace = true }
 web-time = { workspace = true }
 
+[target.'cfg(target_os = "android")'.dependencies]
+fs4 = { workspace = true, features = ["sync"] }
+
 [target.'cfg(windows)'.dependencies]
 winapi-util = { workspace = true }
 
