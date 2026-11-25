@@ -22,6 +22,9 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.HorizontalScrollView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -31,7 +34,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridView;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -64,7 +66,7 @@ public class MainActivity extends Activity {
     private static final int IMPORT = 101, SAVE = 102, SAVE_BATCH = 111;
     private static final int BASE = 0xff111721, TILE = 0xff202a38, DARK = 0xff090e16,
         TEXT = 0xfff5f7fa, SUB = 0xffb6c1cf, GOLD = 0xffe8ae68, WARN = 0xffffbeae;
-    private static final int EDITOR_BG=0xff171819, EDITOR_PANEL=0xff202123, EDITOR_IMAGE=0xff0e0f11;
+    private static final int EDITOR_BG=0xff191919, EDITOR_PANEL=0xff202020, EDITOR_IMAGE=0xff0f0f0f;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     private static final AtomicLong ORDER = new AtomicLong(), CATALOGUE_EPOCH = new AtomicLong();
     private static final ThreadPoolExecutor WORK = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
@@ -100,12 +102,15 @@ public class MainActivity extends Activity {
     private MobileQuickReview quickReview;
     private TextView libraryCountLabel;
     private EditText searchField;
-    private Button libraryReview, filmstripToggle;
+    private Button libraryReview;
     private final ArrayList<Photo> editorWindow=new ArrayList<>();
     private final Map<Long,JSONObject> editorRows=new HashMap<>();
     private int editorWindowStart,editorTotal,libraryTotal,editorRestorePosition=-1,navigationTicket;
-    private String editorFamily="light";
-    private boolean panelOpen,navigationBusy,reviewBusy,advanceAfterReview,showFilmstrip=true,searchVisible;
+    private String editorFamily="edit", activeAdjustment="";
+    private boolean showSectionActions;
+    private View sectionControls;
+    private int panelHeightBeforeDrag;
+    private boolean panelOpen,navigationBusy,reviewBusy,advanceAfterReview,showFilmstrip,searchVisible;
     private JSONArray controlSchema = new JSONArray();
     private final Map<String, Double> pendingEdits = new HashMap<>();
     private volatile boolean dead;
@@ -241,9 +246,11 @@ public class MainActivity extends Activity {
             query = saved.getString("query", "");
             memoryGridRow = saved.getInt("grid");
             section = saved.getString("tool", "light");
-            editorFamily = saved.getString("editor_family", "light");
+            editorFamily = saved.getString("editor_family", "edit");
+            if ("light".equals(editorFamily) || "color".equals(editorFamily) || "detail".equals(editorFamily)) editorFamily="edit";
+            activeAdjustment = saved.getString("editor_adjustment", "");
             panelOpen = saved.getBoolean("tool_open",false);
-            showFilmstrip = saved.getBoolean("filmstrip",true);
+            showFilmstrip = saved.getBoolean("filmstrip",false);
             searchVisible = saved.getBoolean("search_visible",false);
             advanceAfterReview=saved.getBoolean("review_advance",false);
             editorRestorePosition = saved.getInt("editor_position",-1);
@@ -272,7 +279,7 @@ public class MainActivity extends Activity {
         libraryTools.save(b); print.saveState(b); slideshow.saveState(b);
         if (pendingBatch!=null) b.putString("batch_picker",pendingBatch.serialize());
         b.putString("catalogue", catalogueId);
-        b.putString("editor_family",editorFamily);
+        b.putString("editor_family",editorFamily);b.putString("editor_adjustment",activeAdjustment);
         b.putBoolean("tool_open",panelOpen);b.putBoolean("filmstrip",showFilmstrip);b.putBoolean("search_visible",searchVisible);b.putBoolean("review_advance",advanceAfterReview);
         int editorIndex=selected==null?-1:editorLocalIndex(selected.id());
         b.putInt("editor_position",editorIndex<0?-1:editorWindowStart+editorIndex);
@@ -332,11 +339,11 @@ public class MainActivity extends Activity {
         grid = null; adapter = null; more = null; preview = null; export = null;
         undo = null; redo = null; compare = null;
         sliders.clear(); toggles.clear(); sliderSpecs.clear(); editorPanel = null;
-        editorDock=null;railHolder=null;filmstripHolder=null;filmstripToggle=null;libraryCountLabel=null;searchField=null;libraryReview=null;quickReview=null;
+        editorDock=null;railHolder=null;sectionControls=null;panelHeightBeforeDrag=0;filmstripHolder=null;libraryCountLabel=null;searchField=null;libraryReview=null;quickReview=null;
         Configuration c = getResources().getConfiguration();
         sideBySide = c.screenWidthDp >= 600 || (c.screenWidthDp >= 475 && c.screenWidthDp > c.screenHeightDp);
         boolean editing="editor".equals(screen) && selected!=null;
-        root = stack(editing?EDITOR_BG:BASE);
+        root = stack("settings".equals(screen)?BASE:EDITOR_BG);
         root.setId(R.id.main_screen);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets safe = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
@@ -347,29 +354,30 @@ public class MainActivity extends Activity {
         root.requestApplyInsets();
 
         LinearLayout bar = row();
-        bar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        bar.setPadding(dp(4), dp(1), dp(4), dp(1));
         bar.setMinimumHeight(dp(52));
-        if(editing) bar.addView(glyph("‹",R.string.back,this::goBack),lp(dp(48),dp(48)));
+        if(editing) bar.addView(icon("back",R.string.back,this::goBack),lp(dp(48),dp(48)));
         else if (!"library".equals(screen)) bar.addView(button(R.string.back, false, this::goBack), lp(WRAP, WRAP));
-        title = label("", editing?17:22, TEXT, true);
+        title = label("", editing?15:22, TEXT, !editing);
         title.setId(R.id.screen_title);
         title.setAccessibilityHeading(true);
         title.setSingleLine(true); title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setPadding(dp(8), 0, dp(4), 0);
+        title.setPadding(dp(editing?4:12), 0, dp(4), 0);
         bar.addView(title, new LinearLayout.LayoutParams(0, WRAP, 1));
         if(editing) {
-            undo=glyph("↶",R.string.undo,()->edit("undo",args("id",selected.id())));
-            redo=glyph("↷",R.string.redo,()->edit("redo",args("id",selected.id())));
-            compare=glyph("◐",R.string.compare_before,()->{comparePinned=!comparePinned;displayComparison();});
-            export=glyph("↑",R.string.export,this::startExport);
+            undo=icon("undo",R.string.undo,()->edit("undo",args("id",selected.id())));
+            redo=icon("redo",R.string.redo,()->edit("redo",args("id",selected.id())));
+            compare=icon("before",R.string.compare_before,()->{comparePinned=!comparePinned;displayComparison();});
+            export=icon("export",R.string.export,this::startExport);
             export.setId(R.id.primary_action);
-            export.setTextColor(GOLD);
             export.setOnLongClickListener(v->{chooseExport();return true;});
-            for(Button control:new Button[]{undo,redo,compare,export})bar.addView(control,lp(dp(48),dp(48)));
+            for(Button control:new Button[]{undo,compare,export})bar.addView(control,lp(dp(48),dp(48)));
+            Button actions=icon("more",R.string.ux_more,this::showEditorActions);
+            actions.setId(R.id.editor_actions);bar.addView(actions,lp(dp(48),dp(48)));
             export.setEnabled(photoUsable&&!exporting);syncEditorActions();
             title.setOnLongClickListener(v->{photoInfo();return true;});
         } else if (!"settings".equals(screen)) {
-            Button searchButton=glyph("⌕",R.string.ux_search_toggle,()->{
+            Button searchButton=icon("search",R.string.ux_search_toggle,()->{
                 searchVisible=!searchVisible||!query.isEmpty();showScreen();if(ready)loadLibrary(true);
                 if(searchVisible&&searchField!=null){
                     EditText field=searchField;field.requestFocus();
@@ -378,13 +386,13 @@ public class MainActivity extends Activity {
                 }
             });
             bar.addView(searchButton,lp(dp(48),dp(48)));
-            Button open = button(R.string.settings, false, () -> {
+            Button open = icon("settings",R.string.settings, () -> {
                 commitAdjustments();
                 if (grid != null) memoryGridRow = grid.getFirstVisiblePosition();
                 returnFromSettings = screen; screen = "settings"; showScreen();
             });
             open.setId(R.id.settings_action);
-            bar.addView(open);
+            bar.addView(open,lp(dp(48),dp(48)));
         }
         root.addView(bar, lp(MATCH, WRAP));
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -405,8 +413,8 @@ public class MainActivity extends Activity {
 
     private void drawLibrary(Configuration c) {
         title.setText(R.string.library);
-        libraryCountLabel=label(getString(R.string.ux_count,libraryTotal),13,SUB,false);
-        libraryCountLabel.setPadding(dp(16),0,dp(16),dp(4));root.addView(libraryCountLabel,lp(MATCH,WRAP));
+        libraryCountLabel=label(getString(R.string.ux_count,libraryTotal),11,SUB,false);
+        libraryCountLabel.setPadding(dp(14),0,dp(14),dp(4));root.addView(libraryCountLabel,lp(MATCH,WRAP));
         EditText search = new EditText(this);searchField=search;
         search.setId(R.id.search_field);
         search.setTextColor(TEXT); search.setHintTextColor(SUB); search.setHint(R.string.search); search.setText(query);
@@ -435,10 +443,7 @@ public class MainActivity extends Activity {
         root.addView(content, new LinearLayout.LayoutParams(MATCH, 0, 1));
         grid = new GridView(this);
         grid.setId(R.id.library_grid);
-        grid.setNumColumns(Math.min(5, Math.max(2, c.screenWidthDp / 158)));
-        grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
-        grid.setHorizontalSpacing(dp(8)); grid.setVerticalSpacing(dp(8));
-        grid.setPadding(dp(16), dp(8), dp(16), dp(8)); grid.setClipToPadding(false);
+        MobileGalleryChrome.configure(grid,c.screenWidthDp);
         adapter = new PhotoAdapter();
         grid.setAdapter(adapter);
         grid.setOnItemClickListener((a, view, position, id) -> {
@@ -457,7 +462,7 @@ public class MainActivity extends Activity {
             return consumed;
         });
         content.addView(grid, new FrameLayout.LayoutParams(MATCH, MATCH));
-        LinearLayout intro = stack(BASE);
+        LinearLayout intro = stack(EDITOR_IMAGE);
         intro.setGravity(Gravity.CENTER);
         intro.setPadding(dp(24), dp(6), dp(24), dp(6));
         empty = label(getString(R.string.empty_title), 22, TEXT, true);
@@ -473,10 +478,14 @@ public class MainActivity extends Activity {
         more.setVisibility(View.GONE);
         root.addView(more, lp(MATCH, WRAP));
         LinearLayout foot=row();
-        Button add=primary(R.string.import_photos,this::chooseImport);
+        Button add=sectionLabel(R.string.import_photos,false,this::chooseImport);
+        add.setId(R.id.primary_action);
+        android.graphics.drawable.Drawable plus=MobileIcons.drawable("import",0xffefbc84);plus.setBounds(0,0,dp(20),dp(20));
+        add.setCompoundDrawablesRelative(plus,null,null,null);add.setCompoundDrawablePadding(dp(4));
+        add.setTextColor(0xffefbc84);add.setMaxLines(2);add.setSingleLine(false);
         add.setEnabled(!importing);
         foot.addView(add,new LinearLayout.LayoutParams(0,WRAP,2));
-        libraryReview=button(R.string.ux_library_review,false,()->{
+        libraryReview=sectionLabel(R.string.ux_library_review,false,()->{
             if(photos.isEmpty())return;
             int first=grid==null?0:Math.min(photos.size()-1,Math.max(0,grid.getFirstVisiblePosition()));
             setEditorWindowFromGrid();editorFamily="review";section="review";panelOpen=true;
@@ -507,23 +516,21 @@ public class MainActivity extends Activity {
         preview.setComparisonGesture(() -> compareBefore(true), () -> compareBefore(false));
         preview.setNavigationGesture(this::stepEditor);
         canvas.addView(preview,new FrameLayout.LayoutParams(MATCH,MATCH));
-        filmstripToggle=glyph("▦",R.string.ux_filmstrip,()->{showFilmstrip=!showFilmstrip;refreshFilmstrip();});
-        FrameLayout.LayoutParams fold=new FrameLayout.LayoutParams(dp(48),dp(48),Gravity.END|Gravity.BOTTOM);
-        fold.setMargins(0,0,dp(6),dp(6));canvas.addView(filmstripToggle,fold);
         visual.addView(canvas,new LinearLayout.LayoutParams(MATCH,0,1));
 
-        filmstripHolder=stack(EDITOR_BG);
+        filmstripHolder=stack(EDITOR_IMAGE);
         visual.addView(filmstripHolder,lp(MATCH,WRAP));
         refreshFilmstrip();
 
         editorDock=stack(EDITOR_PANEL);
         editorDock.setId(R.id.tool_panel);
-        int dockSize = wide ? Math.max(178,Math.min(358,(c.screenWidthDp-68)*47/100))
-            : Math.max(152,Math.min(288,c.screenHeightDp*37/100));
+        int railWidth=c.fontScale>=1.3f?88:72;
+        int dockSize = wide ? Math.max(184,Math.min(355,(c.screenWidthDp-railWidth)*45/100))
+            : Math.max(176,Math.min(252,c.screenHeightDp*50/100));
         body.addView(editorDock,wide ? lp(dp(dockSize),MATCH) : lp(MATCH,dp(dockSize)));
         editorPanel=editorDock;
         railHolder=stack(EDITOR_BG);
-        body.addView(railHolder,wide ? lp(dp(72),MATCH) : lp(MATCH,WRAP));
+        body.addView(railHolder,wide ? lp(dp(railWidth),MATCH) : lp(MATCH,WRAP));
         fillEditorPanel();
     }
 
@@ -534,11 +541,6 @@ public class MainActivity extends Activity {
         int position=i<0?0:editorWindowStart+i+1;
         boolean hasPrev=position>1;
         boolean hasNext=position>0 && position<editorTotal;
-        if(filmstripToggle!=null){
-            filmstripToggle.setVisibility(position!=0&&editorTotal>1?View.VISIBLE:View.GONE);
-            filmstripToggle.setContentDescription(getString(showFilmstrip?R.string.ux_hide_filmstrip:R.string.ux_filmstrip));
-            filmstripToggle.setSelected(showFilmstrip);
-        }
         if (showFilmstrip && position!=0 && editorTotal>1) {
             ArrayList<MobileFilmstrip.Item> window=new ArrayList<>();
             for(int q=Math.max(0,i-2);q<Math.min(editorWindow.size(),i+3);q++){
@@ -548,22 +550,9 @@ public class MainActivity extends Activity {
             filmstripHolder.addView(MobileFilmstrip.create(this,window,selected.id(),position,editorTotal,
                 hasPrev&&!navigationBusy,hasNext&&!navigationBusy,sideBySide,this::openEditorNeighbor,this::stepEditor,this::requestFilmThumb),lp(MATCH,WRAP));
         } else {
-            LinearLayout line=row();
-            if(position>0 && editorTotal>1) {
-                Button previous=glyph("‹",R.string.filmstrip_previous,()->stepEditor(-1));
-                previous.setEnabled(hasPrev&&!navigationBusy);line.addView(previous,lp(dp(48),dp(48)));
-            }
-            Button fold=button(R.string.ux_filmstrip,false,()->{showFilmstrip=!showFilmstrip;refreshFilmstrip();});
-            fold.setText(position==0?getString(R.string.ux_filmstrip):getString(R.string.ux_position,position,editorTotal));
-            fold.setContentDescription(position==0?getString(R.string.ux_filmstrip):getString(R.string.ux_filmstrip_status,position,editorTotal));
-            fold.setEnabled(editorTotal>1&&position>0);
-            line.addView(fold,new LinearLayout.LayoutParams(0,WRAP,1));
-            if(position>0 && editorTotal>1) {
-                Button next=glyph("›",R.string.filmstrip_next,()->stepEditor(1));
-                next.setEnabled(hasNext&&!navigationBusy);line.addView(next,lp(dp(48),dp(48)));
-            }
-            line.setVisibility(position>0&&editorTotal>1?View.VISIBLE:View.GONE);
-            filmstripHolder.addView(line,lp(MATCH,WRAP));
+            filmstripHolder.addView(MobileFilmstrip.createCollapsed(this,position,editorTotal,
+                hasPrev&&!navigationBusy,hasNext&&!navigationBusy,this::stepEditor,
+                ()->{showFilmstrip=true;refreshFilmstrip();}),lp(MATCH,WRAP));
         }
     }
 
@@ -582,15 +571,57 @@ public class MainActivity extends Activity {
         },e->apply.accept(null));
     }
 
-    private Button glyph(String glyph, int label, Runnable action) {
-        Button b = button(label, false, action);
-        b.setText(glyph);
-        b.setTextSize(21);
-        b.setPadding(0, 0, 0, 0);
-        b.setBackground(shape(0xe6202a38, 10));
-        b.setTooltipText(getString(label));
-        b.setContentDescription(getString(label));
-        return b;
+    private Button icon(String key, int labelRes, Runnable action) {
+        android.graphics.drawable.Drawable drawing=MobileIcons.drawable(key,TEXT);
+        Button control = new Button(this){
+            @Override protected void onDraw(android.graphics.Canvas canvas){
+                super.onDraw(canvas);
+                int size=dp(22);
+                int left=(getWidth()-size)/2, top=(getHeight()-size)/2;
+                drawing.setBounds(left,top,left+size,top+size);
+                drawing.setLayoutDirection(getLayoutDirection());
+                drawing.draw(canvas);
+            }
+        };
+        control.setMinWidth(dp(48));control.setMinHeight(dp(48));control.setMinimumWidth(dp(48));control.setMinimumHeight(dp(48));
+        control.setPadding(0, 0, 0, 0);
+        control.setContentDescription(getString(labelRes));
+        control.setTooltipText(getString(labelRes));
+        control.setBackground(softAction());
+        control.setOnClickListener(v->action.run());
+        return control;
+    }
+
+    private android.graphics.drawable.Drawable softAction() {
+        android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
+        GradientDrawable focus=shape(0xff2a2a2a,7);
+        focus.setStroke(dp(2),0xffd6d6d6);
+        states.addState(new int[]{android.R.attr.state_focused},focus);
+        states.addState(new int[]{android.R.attr.state_selected},shape(0xff303030,7));
+        states.addState(new int[0],shape(0x00000000,7));
+        return new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x40ffffff),states,shape(0xffffffff,7));
+    }
+
+    private void showEditorActions() {
+        if (selected==null) return;
+        android.widget.PopupMenu menu=new android.widget.PopupMenu(this,root.findViewById(R.id.editor_actions));
+        menu.getMenu().add(0,1,0,R.string.mobile_export_options);
+        menu.getMenu().add(0,2,1,showFilmstrip?R.string.ux_hide_filmstrip:R.string.ux_filmstrip);
+        menu.getMenu().add(0,3,2,R.string.info);
+        menu.getMenu().add(0,4,3,R.string.mobile_organize);
+        menu.getMenu().add(0,5,4,R.string.redo).setEnabled(redo.isEnabled());
+        menu.setOnMenuItemClickListener(item->{
+            switch(item.getItemId()){
+                case 1 -> chooseExport();
+                case 2 -> {showFilmstrip=!showFilmstrip;refreshFilmstrip();}
+                case 3 -> photoInfo();
+                case 4 -> libraryTools.organize(selected.id());
+                case 5 -> edit("redo",args("id",selected.id()));
+                default -> {return false;}
+            }
+            return true;
+        });
+        menu.show();
     }
 
     private void cropPhoto() {
@@ -648,76 +679,130 @@ public class MainActivity extends Activity {
 
     private record SectionChip(String key,int label) {}
     private static final java.util.List<MobileEditorRail.Tab> EDITOR_TABS=java.util.List.of(
-        new MobileEditorRail.Tab("light",R.string.light),
-        new MobileEditorRail.Tab("color",R.string.color),
-        new MobileEditorRail.Tab("detail",R.string.ux_tab_detail),
+        new MobileEditorRail.Tab("edit",R.string.ux_mode_edit),
+        new MobileEditorRail.Tab("looks",R.string.ux_mode_presets),
         new MobileEditorRail.Tab("crop",R.string.ux_tab_crop),
         new MobileEditorRail.Tab("local",R.string.ux_tab_local),
+        new MobileEditorRail.Tab("heal",R.string.ux_mode_repair),
         new MobileEditorRail.Tab("review",R.string.ux_tab_review));
     private static java.util.List<SectionChip> subTools(String family) {
         return switch(family) {
-            case "light" -> java.util.List.of(new SectionChip("light",R.string.light),new SectionChip("curves_direct",R.string.ux_curves),new SectionChip("curve",R.string.ux_parametric),new SectionChip("hdr",R.string.ux_hdr));
-            case "color" -> java.util.List.of(new SectionChip("color",R.string.color),new SectionChip("mixer",R.string.ux_mix),new SectionChip("grading",R.string.ux_grading),
-                new SectionChip("bwMix",R.string.ux_bw),new SectionChip("pointColor",R.string.ux_point),new SectionChip("profile",R.string.ux_looks));
-            case "detail" -> java.util.List.of(new SectionChip("detail",R.string.ux_tab_detail),new SectionChip("effects",R.string.ux_effects),
-                new SectionChip("optics",R.string.ux_optics),new SectionChip("grain",R.string.ux_grain),new SectionChip("vignette",R.string.ux_vignette),
+            case "edit" -> java.util.List.of(
+                new SectionChip("light",R.string.light),new SectionChip("color",R.string.color),
+                new SectionChip("curves_direct",R.string.ux_curves),new SectionChip("effects",R.string.ux_effects),
+                new SectionChip("detail",R.string.ux_tab_detail),new SectionChip("optics",R.string.ux_optics),
+                new SectionChip("mixer",R.string.ux_mix),new SectionChip("grading",R.string.ux_grading),
+                new SectionChip("bwMix",R.string.ux_bw),new SectionChip("pointColor",R.string.ux_point),
+                new SectionChip("curve",R.string.ux_parametric),new SectionChip("hdr",R.string.ux_hdr),
+                new SectionChip("grain",R.string.ux_grain),new SectionChip("vignette",R.string.ux_vignette),
                 new SectionChip("lensBlur",R.string.ux_blur),new SectionChip("calibration",R.string.ux_calibration));
+            case "looks" -> java.util.List.of(new SectionChip("profile",R.string.ux_mode_presets));
             case "crop" -> java.util.List.of(new SectionChip("crop",R.string.ux_tab_crop),new SectionChip("geometry",R.string.ux_geometry));
             case "local" -> java.util.List.of(new SectionChip("local",R.string.ux_tab_local));
+            case "heal" -> java.util.List.of(new SectionChip("heal",R.string.ux_mode_repair));
             default -> java.util.List.of(new SectionChip("review",R.string.ux_tab_review));
         };
     }
+
+    private void closeTools() {
+        if(!panelOpen)return;
+        commitAdjustments();panelOpen=false;showSectionActions=false;fillEditorPanel();
+    }
+
     private void selectEditorFamily(String key) {
         commitAdjustments();
-        if (panelOpen && key.equals(editorFamily)) {panelOpen=false;fillEditorPanel();return;}
-        if (!key.equals(editorFamily)) section=subTools(key).get(0).key();
-        editorFamily=key;panelOpen=true;fillEditorPanel();
+        if (panelOpen && key.equals(editorFamily)) {closeTools();return;}
+        if (!key.equals(editorFamily)) {section=subTools(key).get(0).key();activeAdjustment="";}
+        editorFamily=key;panelOpen=true;showSectionActions=false;fillEditorPanel();
     }
 
     private void fillEditorPanel() {
         if (editorPanel==null || railHolder==null) return;
         editorPanel.removeAllViews();
-        sliders.clear();toggles.clear();sliderSpecs.clear();quickReview=null;
+        sliders.clear();toggles.clear();sliderSpecs.clear();quickReview=null;sectionControls=null;panelHeightBeforeDrag=0;
         editorPanel.setVisibility(panelOpen?View.VISIBLE:View.GONE);
         railHolder.removeAllViews();
         railHolder.addView(editorRail.build(sideBySide,EDITOR_TABS,panelOpen?editorFamily:"",this::selectEditorFamily),
             sideBySide?lp(MATCH,MATCH):lp(MATCH,WRAP));
         if(!panelOpen)return;
-        if("review".equals(editorFamily)) {fillReviewPanel();return;}
+        if(!sideBySide){
+            Configuration cfg=getResources().getConfiguration();
+            int desired="review".equals(editorFamily)?238:
+                ("edit".equals(editorFamily)?(showSectionActions?218:196):
+                    ("looks".equals(editorFamily)&&showSectionActions?196:(groupsDockNeedsRoom()?188:152)));
+            int height=Math.min(desired,Math.max(150,cfg.screenHeightDp*45/100));
+            ViewGroup.LayoutParams layout=editorPanel.getLayoutParams();
+            layout.height=dp(height);editorPanel.setLayoutParams(layout);
+        }
         java.util.List<SectionChip> groups=subTools(editorFamily);
+        java.util.List<MobileDevelopTools.Slider> available=developTools.sliders(controlSchema,section);
+        boolean presets="looks".equals(editorFamily);
+        boolean panelHasFocus=!available.isEmpty()&&(presets?showSectionActions:!showSectionActions);
+        LinearLayout head=row();
         if(groups.size()>1) {
-            android.widget.HorizontalScrollView rail=new android.widget.HorizontalScrollView(this);
-            rail.setHorizontalScrollBarEnabled(false);
-            LinearLayout row=row();row.setPadding(dp(6),0,dp(6),dp(2));
-            rail.addView(row,lp(WRAP,WRAP));
+            HorizontalScrollView strip=new HorizontalScrollView(this);
+            strip.setHorizontalScrollBarEnabled(false);
+            LinearLayout names=row();
+            names.setPadding(dp(8),0,0,0);
+            strip.addView(names,lp(WRAP,WRAP));
             for(SectionChip chip:groups){
-                Button item=button(chip.label(),chip.key().equals(section),()->{
+                boolean checked=chip.key().equals(section);
+                Button item=sectionLabel(chip.label(),checked,()->{
                     if("curves_direct".equals(chip.key()))canvasTool("curve");else selectToolPanel(chip.key());
                 });
-                item.setMinHeight(dp(48));item.setSelected(chip.key().equals(section));
-                row.addView(item,lp(WRAP,WRAP));
-                if(chip.key().equals(section))rail.post(()->rail.scrollTo(Math.max(0,item.getLeft()-dp(6)),0));
+                names.addView(item,lp(WRAP,dp(48)));
+                if(checked)strip.post(()->{
+                    if(item.getRight()>strip.getWidth())strip.scrollTo(Math.max(0,item.getRight()-strip.getWidth()),0);
+                });
             }
-            editorPanel.addView(rail,lp(MATCH,WRAP));
+            head.addView(strip,new LinearLayout.LayoutParams(0,dp(48),1));
+        } else {
+            TextView name=label(getString(groups.get(0).label()),14,TEXT,true);
+            name.setPadding(dp(16),0,0,0);
+            head.addView(name,new LinearLayout.LayoutParams(0,WRAP,1));
         }
+        if(!available.isEmpty()){
+            int label=presets?(showSectionActions?R.string.look_presets:R.string.look_amount):
+                (showSectionActions?R.string.ux_back_adjustments:R.string.ux_section_actions);
+            Button settingsSwitch=icon(showSectionActions?(presets?"looks":"edit"):(presets?"edit":"more"),
+                label,()->{
+                    commitAdjustments();showSectionActions=!showSectionActions;fillEditorPanel();
+                });
+            head.addView(settingsSwitch,lp(dp(48),dp(48)));
+        }
+        Button close=icon("collapse",R.string.ux_collapse_tools,this::closeTools);
+        close.setOnTouchListener(new View.OnTouchListener(){
+            float start;
+            public boolean onTouch(View v,MotionEvent e){
+                if(e.getActionMasked()==MotionEvent.ACTION_DOWN)start=e.getRawY();
+                if(e.getActionMasked()==MotionEvent.ACTION_MOVE&&e.getRawY()-start>dp(30)){
+                    v.setPressed(false);closeTools();return true;
+                }
+                return false;
+            }
+        });
+        head.addView(close,lp(dp(48),dp(48)));
+        editorPanel.addView(head,lp(MATCH,WRAP));sectionControls=head;
+        if("review".equals(editorFamily)) {fillReviewPanel();return;}
         ScrollView settingsView=scroll();
         LinearLayout content=stack(EDITOR_PANEL);
-        content.setPadding(dp(14),dp(4),dp(14),dp(10));
-        if("crop".equals(section)) {
+        content.setPadding(dp(10),0,dp(10),dp(4));
+        if(panelHasFocus){
+            fillAdjustment(content,available);
+        } else if("crop".equals(section)) {
             panelButton(content,R.string.mobile_free_crop,()->canvasTool("crop"));
             panelButton(content,R.string.ux_crop_ratios,this::cropPhoto);
         } else if("local".equals(section)) {
             panelButton(content,R.string.mobile_masks,()->canvasTool("mask"));
+        } else if("heal".equals(section)) {
             panelButton(content,R.string.mobile_remove,()->canvasTool("remove"));
             panelButton(content,R.string.canvas_eyes,()->canvasTool("eyes"));
+        } else if("profile".equals(section) && selected!=null){
+            long id=selected.id();
+            looks.populateEditorPresets(id,content,()->panelOpen&&"looks".equals(editorFamily)
+                &&isEditing(id)&&content.isAttachedToWindow());
         } else {
-            if("light".equals(section) || "color".equals(section)) {
-                for(MobileDevelopTools.Slider spec:developTools.sliders(controlSchema,section))addControl(content,spec);
-                addExtraControls(content);
-            } else {
-                addExtraControls(content);
-                for(MobileDevelopTools.Slider spec:developTools.sliders(controlSchema,section))addControl(content,spec);
-            }
+            addExtraControls(content);
             if ("light".equals(section)) panelButton(content,R.string.reset,this::askReset);
             else if (!"hdr".equals(section) && !"profile".equals(section)) {
                 panelButton(content,R.string.mobile_reset_group,()->advanced("reset_section",args("section",section)));
@@ -726,6 +811,21 @@ public class MainActivity extends Activity {
         settingsView.addView(content,lp(MATCH,WRAP));
         editorPanel.addView(settingsView,new LinearLayout.LayoutParams(MATCH,0,1));
         syncControls();
+    }
+
+    private boolean groupsDockNeedsRoom(){
+        return "geometry".equals(section)||"heal".equals(section)||"crop".equals(section);
+    }
+
+    private Button sectionLabel(int titleRes, boolean checked, Runnable click) {
+        Button v=new Button(this);
+        v.setAllCaps(false);v.setText(titleRes);v.setTextSize(13);
+        v.setMinWidth(dp(48));v.setMinimumWidth(dp(48));v.setMinHeight(dp(48));v.setMinimumHeight(dp(48));
+        v.setPadding(dp(9),0,dp(9),0);v.setSingleLine(true);
+        v.setTextColor(checked?0xffefbc84:SUB);v.setSelected(checked);
+        if(checked) v.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        v.setBackground(softAction());v.setOnClickListener(view->click.run());
+        return v;
     }
 
     private void fillReviewPanel() {
@@ -764,7 +864,7 @@ public class MainActivity extends Activity {
     private void selectToolPanel(String key) {
         if (key.equals(section)) return;
         commitAdjustments();
-        section = key;
+        section = key;activeAdjustment="";showSectionActions=false;
         fillEditorPanel();
     }
 
@@ -793,7 +893,10 @@ public class MainActivity extends Activity {
     }
 
     private void panelButton(LinearLayout content, int name, Runnable run) {
-        content.addView(button(name, false, run), lp(MATCH, WRAP));
+        Button entry=sectionLabel(name,false,run);
+        entry.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);entry.setSingleLine(false);
+        entry.setMaxLines(3);entry.setTextColor(TEXT);entry.setTextSize(15);
+        content.addView(entry, lp(MATCH, WRAP));
     }
 
     private void mobileSwitch(LinearLayout pane, int title, String state, String tool, String group) {
@@ -932,49 +1035,82 @@ public class MainActivity extends Activity {
         }, e -> { if (isEditing(id)) problem(e); });
     }
 
-    private void addControl(LinearLayout pane, MobileDevelopTools.Slider spec) {
-        LinearLayout header = row();
-        header.addView(label(spec.label(),15,TEXT,true),new LinearLayout.LayoutParams(0,WRAP,1));
-        TextView valueLabel=label("",15,GOLD,true);
-        valueLabel.setGravity(Gravity.CENTER);valueLabel.setMinWidth(dp(42));
-        SeekBar slider = new SeekBar(this);
-        Button less=glyph("−",R.string.ux_decrease,()->stepSlider(spec,slider,-1));
-        Button plus=glyph("+",R.string.ux_increase,()->stepSlider(spec,slider,1));
-        less.setContentDescription(getString(R.string.ux_less_value,spec.label()));
-        plus.setContentDescription(getString(R.string.ux_more_value,spec.label()));
-        header.addView(less,lp(dp(48),dp(48)));header.addView(valueLabel,lp(WRAP,WRAP));header.addView(plus,lp(dp(48),dp(48)));
-        pane.addView(header,lp(MATCH,WRAP));
-        slider.setContentDescription(spec.label());
-        slider.setMax(spec.steps());
-        int p = spec.position(settings.optDouble(spec.key(), spec.initial()));
-        slider.setProgress(p); slider.setMinimumHeight(dp(48)); slider.setEnabled(photoUsable);
-        showValue(spec, p, valueLabel, slider);
-        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onStartTrackingTouch(SeekBar b) {
+    private void fillAdjustment(LinearLayout pane,java.util.List<MobileDevelopTools.Slider> specs) {
+        MobileDevelopTools.Slider spec=specs.stream().filter(item->item.key().equals(activeAdjustment))
+            .findFirst().orElse(specs.get(0));
+        activeAdjustment=spec.key();
+        MobileAdjustmentDock.Dock dock=MobileAdjustmentDock.create(this,specs,spec.key(),key->{
+            if(key.equals(activeAdjustment))return;
+            commitAdjustments();activeAdjustment=key;fillEditorPanel();
+            SeekBar selectedSlider=sliders.get(key);
+            if(selectedSlider!=null)selectedSlider.post(()->{
+                android.view.accessibility.AccessibilityManager manager=getSystemService(android.view.accessibility.AccessibilityManager.class);
+                if(manager!=null&&manager.isTouchExplorationEnabled())
+                    selectedSlider.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,null);
+                else if(!selectedSlider.isInTouchMode())selectedSlider.requestFocus();
+            });
+        },()->resetAdjustment(spec),getString(R.string.ux_reset_parameter,spec.label()));
+        SeekBar slider=dock.slider();slider.setId(R.id.active_adjustment);
+        TextView valueLabel=dock.valueLabel();valueLabel.setId(R.id.adjustment_value);
+        int p=spec.position(settings.optDouble(spec.key(),spec.initial()));
+        slider.setProgress(p);
+        showValue(spec,p,valueLabel,slider);
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onStartTrackingTouch(SeekBar b){
                 sliding=true;ui.removeCallbacks(adjustDelay);
+                setAdjustmentChrome(dock,View.INVISIBLE);
             }
-            @Override public void onProgressChanged(SeekBar b, int n, boolean user) {
+            @Override public void onProgressChanged(SeekBar b,int n,boolean user){
                 showValue(spec,n,valueLabel,slider);
                 if(!user||!photoUsable)return;
-                pendingEdits.put(spec.key(),spec.value(n));
-                ++draftRevision;
-                if(sliding) scheduleSliderDraft();
-                else {ui.removeCallbacks(adjustDelay);ui.postDelayed(adjustDelay,180);}
+                pendingEdits.put(spec.key(),spec.value(n));++draftRevision;
+                if(sliding)scheduleSliderDraft();
+                else{ui.removeCallbacks(adjustDelay);ui.postDelayed(adjustDelay,180);}
             }
-            @Override public void onStopTrackingTouch(SeekBar b) { sliding=false;commitAdjustments(); }
+            @Override public void onStopTrackingTouch(SeekBar b){
+                setAdjustmentChrome(dock,View.VISIBLE);
+                sliding=false;commitAdjustments();
+            }
         });
-        sliders.put(spec.key(), slider); sliderSpecs.put(spec.key(),spec);
-        pane.addView(slider, lp(MATCH, dp(48)));
+        sliders.put(spec.key(),slider);sliderSpecs.put(spec.key(),spec);
+        toggles.put("parameter_reset",state->dock.resetTarget().setEnabled(photoUsable));
+        pane.addView(dock.container(),lp(MATCH,WRAP));
     }
 
-    private void stepSlider(MobileDevelopTools.Slider spec,SeekBar slider,int direction) {
-        if(!photoUsable||!slider.isEnabled())return;
-        int p=Math.max(0,Math.min(slider.getMax(),slider.getProgress()+direction));
-        if(p==slider.getProgress())return;
-        slider.setProgress(p);pendingEdits.put(spec.key(),spec.value(p));
-        ui.removeCallbacks(adjustDelay);ui.postDelayed(adjustDelay,160);
+    private void setAdjustmentChrome(MobileAdjustmentDock.Dock dock,int visibility){
+        boolean drag=visibility!=View.VISIBLE;
+        boolean collapsePortrait=editorPanel!=null&&!sideBySide;
+        if(collapsePortrait){
+            ViewGroup.LayoutParams panelSize=editorPanel.getLayoutParams();
+            if(drag){
+                panelHeightBeforeDrag=panelSize.height;
+                // Keep the touched seek bar in place: remove exactly the rows above it.
+                // The photo gains the vacated height; the footer retains its allocated bounds.
+                int hidden=dock.strip().getHeight()+(sectionControls==null?0:sectionControls.getHeight());
+                panelSize.height=Math.max(dp(96),panelHeightBeforeDrag-hidden);
+            } else if(panelHeightBeforeDrag>0) {
+                panelSize.height=panelHeightBeforeDrag;panelHeightBeforeDrag=0;
+            }
+            editorPanel.setLayoutParams(panelSize);
+        }
+        int rows=drag&&collapsePortrait?View.GONE:visibility;
+        dock.strip().setVisibility(rows);
+        dock.resetTarget().setVisibility(visibility);
+        if(sectionControls!=null)sectionControls.setVisibility(rows);
+        if(railHolder!=null)railHolder.setVisibility(visibility);
     }
 
+    private void resetAdjustment(MobileDevelopTools.Slider spec){
+        if(!photoUsable||selected==null||!spec.key().equals(activeAdjustment))return;
+        SeekBar slider=sliders.get(spec.key());
+        if(slider==null)return;
+        int position=spec.position(spec.initial());
+        if(position==slider.getProgress())return;
+        slider.setProgress(position);
+        pendingEdits.put(spec.key(),spec.initial());
+        commitAdjustments();
+        if(root!=null)root.announceForAccessibility(getString(R.string.ux_reset_parameter_done,spec.label()));
+    }
     private void scheduleSliderDraft() {
         if(sliding&&!draftInFlight&&!ui.hasCallbacks(draftPulse))ui.postDelayed(draftPulse,90);
     }
@@ -1172,7 +1308,7 @@ public class MainActivity extends Activity {
         synchronized(THUMBNAILS){currentPreview=THUMBNAILS.get(photo.id());}
         beforeLoading=false;compareHeld=false;comparePinned=false;navigationBusy=false;
         settings=new JSONObject();controlSchema=new JSONArray();screen="editor";
-        if(!carryTool){editorFamily="light";section="light";panelOpen=false;}
+        if(!carryTool){editorFamily="edit";section="light";panelOpen=false;activeAdjustment="";showSectionActions=false;}
         showScreen();
         if(ready)openPhoto();
     }
@@ -1504,23 +1640,16 @@ public class MainActivity extends Activity {
         @Override public boolean hasStableIds() { return true; }
 
         @Override public View getView(int p, View reuse, ViewGroup parent) {
-            LinearLayout tile = reuse instanceof LinearLayout ? (LinearLayout) reuse : newTile();
+            MobileGalleryChrome.Tile tile = reuse instanceof MobileGalleryChrome.Tile existing ? existing : new MobileGalleryChrome.Tile(MainActivity.this);
             Photo photo=getItem(p); tile.setTag(photo.id());
             JSONObject row = libraryRows.get(photo.id());
             String badge = row==null ? "" : String.join(" · ", java.util.stream.Stream.of(MobileLibraryTools.badge(row),culling.badge(row))
                 .filter(value->!value.isEmpty()).toArray(String[]::new));
             String display = row==null ? photo.name() : MobileCullingTools.displayName(row);
             int tint = row==null ? 0 : MobileLibraryTools.tint(row);
-            TextView name = (TextView)tile.getChildAt(1);
-            name.setText(badge.isEmpty() ? display : badge + " · " + display);
-            name.setTextColor(tint == 0 ? TEXT : tint);
-            boolean chosen = libraryTools.isSelected(photo.id());
-            tile.setActivated(chosen);
-            tile.setBackground(shape(chosen ? 0xff586a8e : TILE,10));
-            tile.setContentDescription(name.getText());
-            ImageView image=(ImageView)tile.getChildAt(0);
+            tile.bind(display,badge,tint,libraryTools.isSelected(photo.id()));
             Bitmap hit; synchronized(THUMBNAILS){hit=THUMBNAILS.get(photo.id());}
-            image.setImageBitmap(hit);
+            tile.bitmap(hit);
             if(hit==null && !failedThumbs.contains(photo.id()) && thumbRequests.add(photo.id())){
                 long epoch=CATALOGUE_EPOCH.get();
                 work(10, () -> {
@@ -1530,7 +1659,7 @@ public class MainActivity extends Activity {
                     if (epoch!=CATALOGUE_EPOCH.get()) return;
                     thumbRequests.remove(photo.id());
                     synchronized(THUMBNAILS){THUMBNAILS.put(photo.id(),result);}
-                    if(photo.id()==(Long)tile.getTag()) image.setImageBitmap(result);
+                    if(photo.id()==(Long)tile.getTag()) tile.bitmap(result);
                     else if (grid!=null && adapter==this) notifyDataSetChanged();
                 }, error -> {
                     if (epoch==CATALOGUE_EPOCH.get()) { thumbRequests.remove(photo.id()); failedThumbs.add(photo.id()); }
@@ -1539,16 +1668,7 @@ public class MainActivity extends Activity {
             return tile;
         }
 
-        private LinearLayout newTile(){
-            LinearLayout tile=stack(TILE); tile.setBackground(shape(TILE,10)); tile.setClipToOutline(true);
-            ImageView image=new ImageView(MainActivity.this); image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            image.setBackgroundColor(0xff18202b);
-            tile.addView(image,lp(MATCH,dp(sideBySide?125:102)));
-            TextView name=label("",13,TEXT,false);
-            name.setSingleLine(true); name.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-            name.setPadding(dp(8),dp(6),dp(8),dp(6));
-            tile.addView(name,lp(MATCH,WRAP)); return tile;
-        }
+
     }
 
     private <T> void work(int urgency, Callable<T> task, Consumer<T> ok, Consumer<Throwable> failed) {

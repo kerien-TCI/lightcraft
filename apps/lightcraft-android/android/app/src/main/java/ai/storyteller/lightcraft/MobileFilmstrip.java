@@ -5,14 +5,22 @@ import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.ImageButton;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
@@ -34,8 +42,8 @@ final class MobileFilmstrip {
         void request(long id, Consumer<Bitmap> done);
     }
 
-    private static final int DARK = 0xff090e16, TILE = 0xff202a38, EDGE = 0xff536070;
-    private static final int TEXT = 0xfff5f7fa, SUB = 0xffb6c1cf, GOLD = 0xffe8ae68;
+    private static final int DARK = 0xff111316, TILE = 0xff24272c, MUTED = 0xff767b83;
+    private static final int TEXT = 0xfff5f7fa, SUB = 0xffbbc0c8;
     private static final int MAX_TILES = 5, HIT = 48;
 
     private MobileFilmstrip() {}
@@ -51,9 +59,9 @@ final class MobileFilmstrip {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackgroundColor(DARK);
-        row.setPadding(0, dp(context, shortLandscape ? 0 : 2), 0, dp(context, shortLandscape ? 0 : 2));
+        row.setPadding(dp(context,2), 0, dp(context,2), 0);
 
-        row.addView(arrow(context, R.string.filmstrip_previous, "‹", canPrevious, () -> step.accept(-1)),
+        row.addView(arrow(context, R.string.filmstrip_previous, -1, canPrevious, () -> step.accept(-1)),
             new LinearLayout.LayoutParams(dp(context, HIT), dp(context, HIT)));
         row.addView(new Cells(context, window, selectedId, choose, thumbnail),
             new LinearLayout.LayoutParams(0, dp(context, HIT), 1));
@@ -70,46 +78,97 @@ final class MobileFilmstrip {
             : knownTotal ? context.getString(R.string.filmstrip_index_spoken_unknown_position, total)
             : context.getString(R.string.filmstrip_index_spoken_unknown));
         count.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-        count.setMinWidth(dp(context, 48));
-        count.setMaxWidth(dp(context, shortLandscape ? 78 : 100));
+        count.setMinWidth(dp(context, 40));
+        count.setMaxWidth(dp(context, shortLandscape ? 66 : 90));
         count.setMaxLines(2);
         count.setGravity(Gravity.CENTER);
-        count.setTextSize(shortLandscape ? 12 : 13);
+        count.setTextSize(shortLandscape ? 10 : 11);
         count.setTextColor(SUB);
-        count.setPadding(dp(context, 3), 0, dp(context, 3), 0);
+        count.setPadding(dp(context, 2), 0, dp(context, 2), 0);
         count.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         row.addView(count, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(context, HIT)));
 
-        row.addView(arrow(context, R.string.filmstrip_next, "›", canNext, () -> step.accept(1)),
+        row.addView(arrow(context, R.string.filmstrip_next, 1, canNext, () -> step.accept(1)),
             new LinearLayout.LayoutParams(dp(context, HIT), dp(context, HIT)));
         return row;
     }
 
-    private static View arrow(Context context, int label, String glyph, boolean enabled, Runnable click) {
-        // A native Button gives keyboard and TalkBack the button role without custom accessibility actions.
-        android.widget.Button button = new android.widget.Button(context) {
-            @Override public void onRtlPropertiesChanged(int direction) {
-                super.onRtlPropertiesChanged(direction);
-                setText(direction == View.LAYOUT_DIRECTION_RTL ? ("‹".equals(glyph) ? "›" : "‹") : glyph);
+    /** Prev/next retain full touch targets when the thumbnails are hidden. */
+    static View createCollapsed(Context context, int position, int total, boolean canPrevious, boolean canNext,
+                                IntConsumer step, Runnable expand) {
+        LinearLayout row = new LinearLayout(context);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackgroundColor(DARK);
+        if (position <= 0 || total <= 1) {
+            row.setVisibility(View.GONE);
+            return row;
+        }
+        row.addView(arrow(context,R.string.filmstrip_previous,-1,canPrevious,()->step.accept(-1)), new LinearLayout.LayoutParams(dp(context,HIT),dp(context,HIT)));
+        Button counter = new Button(context);
+        counter.setAllCaps(false);
+        counter.setMinHeight(0);
+        counter.setMinimumHeight(dp(context,HIT));
+        counter.setGravity(Gravity.CENTER);
+        counter.setIncludeFontPadding(false);
+        counter.setTextSize(11);
+        counter.setTextColor(SUB);
+        counter.setText(context.getString(R.string.filmstrip_index,position,total));
+        counter.setContentDescription(context.getString(R.string.ux_filmstrip_status,position,total));
+        counter.setTooltipText(context.getString(R.string.ux_filmstrip));
+        counter.setBackground(ripple(context,Color.TRANSPARENT,5));
+        counter.setOnClickListener(v->expand.run());
+        row.addView(counter,new LinearLayout.LayoutParams(0,dp(context,HIT),1));
+        row.addView(arrow(context,R.string.filmstrip_next,1,canNext,()->step.accept(1)), new LinearLayout.LayoutParams(dp(context,HIT),dp(context,HIT)));
+        return row;
+    }
+
+    private static View arrow(Context context, int label, int direction, boolean enabled, Runnable click) {
+        ImageButton button = new ImageButton(context) {
+            @Override public void onRtlPropertiesChanged(int flow) {
+                super.onRtlPropertiesChanged(flow);
+                if (getDrawable()!=null) getDrawable().setLayoutDirection(flow);
             }
         };
-        button.setAllCaps(false);
-        button.setMinWidth(0);
-        button.setMinHeight(0);
-        button.setMinimumWidth(dp(context, HIT));
-        button.setMinimumHeight(dp(context, HIT));
-        button.setPadding(0, 0, 0, 0);
-        button.setGravity(Gravity.CENTER);
-        button.setIncludeFontPadding(false);
-        button.setText(glyph);
+        button.setMinimumWidth(dp(context,HIT));
+        button.setMinimumHeight(dp(context,HIT));
+        button.setPadding(0,0,0,0);
+        button.setScaleType(ImageView.ScaleType.CENTER);
         button.setContentDescription(context.getString(label));
         button.setTooltipText(context.getString(label));
-        button.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 31);
-        button.setTextColor(enabled ? TEXT : EDGE);
-        button.setBackground(ripple(context, Color.TRANSPARENT, 8));
+        button.setBackground(ripple(context,Color.TRANSPARENT,8));
+        Chevron icon = new Chevron(dp(context,18),direction,enabled?TEXT:MUTED);
+        icon.setLayoutDirection(button.getLayoutDirection());
+        button.setImageDrawable(icon);
         button.setEnabled(enabled);
-        button.setOnClickListener(v -> click.run());
+        button.setOnClickListener(v->click.run());
         return button;
+    }
+
+    /** Simple app-native line icon, independent of platform fonts or image resources. */
+    private static final class Chevron extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
+        private final int size, direction;
+        Chevron(int size,int direction,int color) {
+            this.size=size; this.direction=direction;
+            paint.setColor(color); paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.5f,size*.095f));
+            paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
+        }
+        @Override public int getIntrinsicWidth(){return size;}
+        @Override public int getIntrinsicHeight(){return size;}
+        @Override public void draw(Canvas canvas) {
+            Rect r=getBounds();
+            float d=Math.min(r.width(),r.height()), cx=r.exactCenterX(),cy=r.exactCenterY();
+            int sign=(getLayoutDirection()==View.LAYOUT_DIRECTION_RTL?-1:1)*direction;
+            path.reset();path.moveTo(cx-sign*d*.12f,cy-d*.25f);
+            path.lineTo(cx+sign*d*.14f,cy);path.lineTo(cx-sign*d*.12f,cy+d*.25f);
+            canvas.drawPath(path,paint);
+        }
+        @Override public boolean onLayoutDirectionChanged(int dir){ invalidateSelf(); return true; }
+        @Override public void setAlpha(int alpha){paint.setAlpha(alpha);invalidateSelf();}
+        @Override public void setColorFilter(ColorFilter filter){paint.setColorFilter(filter);invalidateSelf();}
+        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
     }
 
     private static final class Cells extends LinearLayout {
@@ -176,27 +235,27 @@ final class MobileFilmstrip {
 
             FrameLayout card = new FrameLayout(context);
             card.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
-            card.setBackground(shape(context, TILE, 7, current ? GOLD : EDGE, current ? 2 : 1));
+            card.setBackground(shape(context, TILE, 3, 0, 0));
             card.setClipToOutline(true);
             FrameLayout.LayoutParams cardSlot = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT);
-            cardSlot.setMargins(dp(context,2),dp(context,3),dp(context,2),dp(context,3));
+            cardSlot.setMargins(dp(context,2),dp(context,4),dp(context,2),dp(context,4));
             tile.addView(card,cardSlot);
 
             TextView placeholder = new TextView(context);
             placeholder.setGravity(Gravity.CENTER);
             placeholder.setText(it.name().isEmpty() ? "·" : new String(Character.toChars(it.name().codePointAt(0))));
             placeholder.setTextColor(SUB);
-            placeholder.setTypeface(null, Typeface.BOLD);
+            placeholder.setTypeface(null, Typeface.NORMAL);
+            placeholder.setTextSize(11);
             card.addView(placeholder, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
 
             ImageView image = new ImageView(context);
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             FrameLayout.LayoutParams picture = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT);
-            int inset = dp(context, current ? 3 : 2);
-            picture.setMargins(inset,inset,inset,inset);
             card.addView(image,picture);
+            if (current) tile.setBackground(shape(context,Color.TRANSPARENT,4,TEXT,1));
             visible.put(it.id(),image);
             if (seen.containsKey(it.id())) image.setImageBitmap(seen.get(it.id()));
             else if (requested.add(it.id())) requester.request(it.id(), bitmap -> {
@@ -207,20 +266,14 @@ final class MobileFilmstrip {
             });
 
             if (current) {
-                TextView check = new TextView(context);
-                check.setText("✓");
-                check.setTextSize(12);
-                check.setTextColor(DARK);
-                check.setTypeface(null,Typeface.BOLD);
-                check.setIncludeFontPadding(false);
-                check.setGravity(Gravity.CENTER);
-                check.setBackground(shape(context,GOLD,8,0,0));
-                FrameLayout.LayoutParams badge = new FrameLayout.LayoutParams(dp(context,17),dp(context,17),
-                    Gravity.TOP | Gravity.END);
-                badge.topMargin = dp(context,1);
-                badge.setMarginEnd(dp(context,1));
-                tile.addView(check,badge);
-                check.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                // High-contrast selected marker in addition to accessibility's selected state.
+                View mark = new View(context);
+                mark.setBackground(shape(context,TEXT,1,0,0));
+                FrameLayout.LayoutParams tab = new FrameLayout.LayoutParams(dp(context,13),dp(context,2),
+                    Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+                tab.bottomMargin = dp(context,3);
+                tile.addView(mark,tab);
+                mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             }
         }
     }

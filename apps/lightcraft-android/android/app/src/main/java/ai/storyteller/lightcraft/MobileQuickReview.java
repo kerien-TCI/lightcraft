@@ -2,9 +2,12 @@ package ai.storyteller.lightcraft;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -30,12 +33,12 @@ final class MobileQuickReview extends ScrollView {
 
     private static final String[] FLAGS = {"none", "pick", "reject"};
     private static final int[] FLAG_NAMES = {R.string.qr_none, R.string.qr_picked, R.string.qr_rejected};
-    private static final int BG = 0xff111721;
-    private static final int SURFACE = 0xff212b39;
-    private static final int OUTLINE = 0xff50607a;
-    private static final int ACCENT = 0xffeeba6d;
-    private static final int TEXT = 0xfff6f8fb;
-    private static final int SECONDARY = 0xffbcc9dc;
+    private static final int BG = 0xff191919;
+    private static final int TEXT = 0xfff5f5f5;
+    private static final int SECONDARY = 0xffbababa;
+    private static final int DISABLED = 0xff919191;
+    private static final int MARK = 0xffdedede;
+    private static final int RIPPLE = 0x29ffffff;
 
     private final Callbacks callbacks;
     private final LinearLayout controls, ratingRows, flagRows;
@@ -61,7 +64,7 @@ final class MobileQuickReview extends ScrollView {
         addView(controls, new ScrollView.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
         TextView title = label(res(R.string.qr_title), 19, TEXT);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         title.setAccessibilityHeading(true);
         controls.addView(title);
         currentRating = label("", 14, SECONDARY);
@@ -94,9 +97,12 @@ final class MobileQuickReview extends ScrollView {
 
         advance = new Switch(context);
         advance.setText(R.string.qr_advance);
-        advance.setTextColor(TEXT);
+        advance.setTextColor(enabledTint(TEXT, DISABLED));
+        advance.setThumbTintList(switchTint(TEXT, 0xffaaaaaa, 0xff777777));
+        advance.setTrackTintList(switchTint(0xff777777, 0xff555555, 0xff3b3b3b));
         advance.setTextSize(15);
         advance.setMinHeight(dp(48));
+        advance.setMinimumHeight(dp(48));
         advance.setShowText(false);
         advance.setPadding(dp(3), dp(3), dp(3), dp(3));
         LinearLayout.LayoutParams toggle = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
@@ -253,18 +259,61 @@ final class MobileQuickReview extends ScrollView {
     private String res(int id) { return getResources().getString(id); }
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
 
+    private static ColorStateList enabledTint(int on, int off) {
+        return new ColorStateList(new int[][]{{-android.R.attr.state_enabled}, {}}, new int[]{off, on});
+    }
+
+    private static ColorStateList switchTint(int on, int off, int disabled) {
+        return new ColorStateList(new int[][]{
+            {-android.R.attr.state_enabled}, {android.R.attr.state_checked}, {}
+        }, new int[]{disabled, on, off});
+    }
+
+    private GradientDrawable shape(int color, float radius) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(radius));
+        return shape;
+    }
+
+    private LayerDrawable selectedOutline(boolean focus) {
+        GradientDrawable base = shape(Color.TRANSPARENT, 5);
+        if (focus) base.setStroke(dp(2), TEXT);
+        LayerDrawable layers = new LayerDrawable(new android.graphics.drawable.Drawable[]{base, shape(MARK, 1)});
+        layers.setLayerWidth(1, dp(18));
+        layers.setLayerHeight(1, dp(2));
+        layers.setLayerGravity(1, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        layers.setLayerInsetBottom(1, dp(4));
+        return layers;
+    }
+
+    private RippleDrawable choiceBackground() {
+        StateListDrawable layers = new StateListDrawable();
+        GradientDrawable focused = shape(Color.TRANSPARENT, 5);
+        focused.setStroke(dp(2), TEXT);
+        layers.addState(new int[]{android.R.attr.state_focused, android.R.attr.state_selected}, selectedOutline(true));
+        layers.addState(new int[]{android.R.attr.state_focused}, focused);
+        layers.addState(new int[]{android.R.attr.state_selected}, selectedOutline(false));
+        layers.addState(new int[0], shape(Color.TRANSPARENT, 5));
+        return new RippleDrawable(ColorStateList.valueOf(RIPPLE), layers, shape(Color.WHITE, 5));
+    }
+
     /** Radio semantics for TalkBack without speculative state changes on tap. */
     private final class Choice extends Button {
         private boolean chosen;
         Choice(Context context) {
             super(context, null, android.R.attr.borderlessButtonStyle);
             setMinWidth(dp(48));
+            setMinimumWidth(dp(48));
             setMinHeight(dp(48));
             setMinimumHeight(dp(48));
             setAllCaps(false);
             setGravity(Gravity.CENTER);
-            setTextSize(15);
-            setPadding(dp(3), dp(4), dp(3), dp(4));
+            setTextSize(14);
+            setStateListAnimator(null);
+            setElevation(0);
+            setBackground(choiceBackground());
+            setPadding(dp(3), dp(4), dp(3), dp(8));
             setMaxLines(2);
         }
 
@@ -272,14 +321,8 @@ final class MobileQuickReview extends ScrollView {
             chosen = selected;
             setSelected(selected);
             setEnabled(enabled);
-            setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
-            setTextColor(selected ? BG : enabled ? TEXT : SECONDARY);
-            GradientDrawable shape = new GradientDrawable();
-            shape.setColor(selected ? ACCENT : SURFACE);
-            shape.setCornerRadius(dp(12));
-            // Selection has a surface fill and heavy outline, not color alone.
-            shape.setStroke(dp(selected ? 2 : 1), selected ? TEXT : OUTLINE);
-            setBackground(new RippleDrawable(ColorStateList.valueOf(0x448d9eb5), shape, null));
+            setTypeface(Typeface.create(selected ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL));
+            setTextColor(!enabled ? DISABLED : selected ? TEXT : SECONDARY);
         }
 
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {

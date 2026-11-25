@@ -33,4 +33,12 @@
     <string name="before_description">Before editing</string>
     <string name="crop">Crop</string>
     <string name="reset_crop">Original framing</string>
+    <string name="ux_mode_edit">Edit</string>
+    <string name="ux_mode_presets">Presets</string>
+    <string name="ux_mode_repair">Heal</string>
+    <string name="ux_collapse_tools">Collapse tools</string>
+    <string name="ux_section_actions">More for this tool</string>
+    <string name="ux_back_adjustments">Back to adjustments</string>
+    <string name="ux_reset_parameter">Reset %1$s</string>
+    <string name="ux_reset_parameter_done">%1$s reset</string>
 </resources>

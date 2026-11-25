@@ -3,11 +3,21 @@ package ai.storyteller.lightcraft;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.text.InputFilter;
 import android.text.InputType;
+import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -15,10 +25,12 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.json.JSONArray;
@@ -30,6 +42,8 @@ final class MobileLooks {
     static final int REQUEST_IMPORT = 104;
     private static final long MAX_ASSET = 16L << 20;
     private static final String INBOX = "LookInbox";
+    private static final int INLINE_PAGE = 32;
+    private static final int INLINE_TEXT = 0xfff5f7fa, INLINE_SUB = 0xffb6c1cf, INLINE_CHIP = 0xff232b37;
 
     interface Host {
         void call(String op, JSONObject args, Consumer<JSONObject> accepted);
@@ -55,8 +69,131 @@ final class MobileLooks {
         };
     }
 
-    void show(long photo) {
-        call("looks.summary", photo, result -> showMenu(photo, result.optBoolean("clipboard"), result.optBoolean("previous")));
+    void show(long photo) { show(photo, () -> true); }
+
+    private void show(long photo, BooleanSupplier current) {
+        call("looks.summary", photo, result -> {
+            if (current.getAsBoolean()) showMenu(photo, result.optBoolean("clipboard"), result.optBoolean("previous"));
+        });
+    }
+
+    /**
+     * One-tap desktop presets on the mobile workspace. The caller owns the lifetime of content
+     * and tells us whether results/clicks still belong to the current photo and open preset panel.
+     */
+    void populateEditorPresets(long photo, LinearLayout content, BooleanSupplier current) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        HorizontalScrollView scroll = new HorizontalScrollView(activity);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setClipToPadding(false);
+        LinearLayout chips = new LinearLayout(activity);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setGravity(Gravity.CENTER_VERTICAL);
+        scroll.addView(chips, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(scroll, new LinearLayout.LayoutParams(0, dp(54), 1));
+
+        ImageButton more = new ImageButton(activity);
+        more.setBackground(inlineSurface(Color.TRANSPARENT));
+        more.setImageDrawable(MobileIcons.drawable("more", INLINE_SUB));
+        more.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        more.setPadding(dp(12), dp(12), dp(12), dp(12));
+        more.setContentDescription(s(R.string.look_tools));
+        more.setTooltipText(s(R.string.look_tools));
+        more.setOnClickListener(v -> { if (current.getAsBoolean()) show(photo, current); });
+        row.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        content.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        call("looks.presets", photo, result -> {
+            if (!current.getAsBoolean()) return;
+            List<Asset> presets = assetRows(result.optJSONArray("items"));
+            if (presets.isEmpty()) {
+                appendInlineChip(chips, s(R.string.look_create_preset), s(R.string.look_create_preset), () -> {
+                    if (!current.getAsBoolean()) return;
+                    createPreset(photo, () -> {
+                        if (!current.getAsBoolean()) return;
+                        content.removeView(row);
+                        populateEditorPresets(photo, content, current);
+                    });
+                });
+                return;
+            }
+            inlinePage(photo, scroll, chips, presets, 0, current);
+        });
+    }
+
+    private void inlinePage(long photo, HorizontalScrollView scroll, LinearLayout chips, List<Asset> presets, int start,
+                            BooleanSupplier current) {
+        chips.removeAllViews();
+        if (start > 0) appendInlineChip(chips, "‹", s(R.string.cull_previous), () -> {
+            if (current.getAsBoolean()) inlinePage(photo, scroll, chips, presets, start - INLINE_PAGE, current);
+        });
+        int end = Math.min(start + INLINE_PAGE, presets.size());
+        for (int i = start; i < end; ++i) {
+            Asset asset = presets.get(i);
+            String name = shortLabel(asset.name(), 90);
+            if (name.isEmpty()) name = shortLabel(asset.key(), 90);
+            if (name.isEmpty()) continue;
+            String title = (asset.favorite() ? "★ " : "") + name;
+            String group = shortLabel(asset.group(), 36);
+            String description = s(R.string.look_apply) + " " + title + (group.isEmpty() ? "" : ", " + group);
+            appendInlineChip(chips, title, description, () -> {
+                if (current.getAsBoolean()) call("looks.applyPreset", photo, r -> {
+                    if (current.getAsBoolean()) notifySaved(R.string.look_applied);
+                }, "key", asset.key(), "amount", 100);
+            });
+        }
+        if (end < presets.size()) appendInlineChip(chips, "›", s(R.string.cull_next), () -> {
+            if (current.getAsBoolean()) inlinePage(photo, scroll, chips, presets, end, current);
+        });
+        scroll.post(() -> {
+            if (!current.getAsBoolean()) return;
+            boolean rtl = scroll.getLayoutDirection() == android.view.View.LAYOUT_DIRECTION_RTL;
+            scroll.scrollTo(rtl ? Math.max(0, chips.getWidth() - scroll.getWidth()) : 0, 0);
+        });
+    }
+
+    private void appendInlineChip(LinearLayout destination, String title, String description, Runnable action) {
+        Button chip = new Button(activity);
+        chip.setAllCaps(false);
+        chip.setTextColor(INLINE_TEXT);
+        chip.setTextSize(13);
+        chip.setText(title);
+        chip.setContentDescription(description);
+        chip.setTooltipText(description);
+        chip.setGravity(Gravity.CENTER);
+        chip.setMaxLines(2);
+        chip.setEllipsize(TextUtils.TruncateAt.END);
+        chip.setMaxWidth(dp(180));
+        chip.setMinWidth(dp(48));
+        chip.setMinimumWidth(dp(48));
+        chip.setPadding(dp(12), 0, dp(12), 0);
+        chip.setBackground(inlineSurface(INLINE_CHIP));
+        chip.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams bounds = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48));
+        bounds.setMarginEnd(dp(6));
+        destination.addView(chip, bounds);
+    }
+
+    private Drawable inlineSurface(int fill) {
+        GradientDrawable body = new GradientDrawable();
+        body.setColor(fill);
+        body.setCornerRadius(dp(9));
+        GradientDrawable mask = new GradientDrawable();
+        mask.setColor(Color.WHITE);
+        mask.setCornerRadius(dp(9));
+        return new RippleDrawable(ColorStateList.valueOf(0x38ffffff),body,mask);
+    }
+
+    private void createPreset(long photo, Runnable refreshed) {
+        enterName(R.string.look_create_preset, "", name -> selectGroups(groups ->
+            call("looks.createPreset", photo, r -> {
+                notifySaved(R.string.look_preset_created);
+                refreshed.run();
+            }, "name", name, "groups", groups)));
     }
 
     private void showMenu(long photo, boolean clipboard, boolean previous) {
@@ -80,7 +217,7 @@ final class MobileLooks {
             result -> drawAssets(photo, profiles, result.optJSONArray("items")));
     }
 
-    private void drawAssets(long photo, boolean profiles, JSONArray input) {
+    private List<Asset> assetRows(JSONArray input) {
         List<Asset> list = new ArrayList<>();
         for (int i = 0; input != null && i < input.length(); ++i) {
             JSONObject row = input.optJSONObject(i);
@@ -88,8 +225,15 @@ final class MobileLooks {
                 list.add(new Asset(row.optString("id"), row.optString("name"), row.optString("group"), row.optBoolean("favorite")));
             }
         }
+        Collator labels = Collator.getInstance(activity.getResources().getConfiguration().getLocales().get(0));
+        labels.setStrength(Collator.SECONDARY);
         list.sort(Comparator.comparing(Asset::favorite).reversed()
-            .thenComparing(Asset::group, String.CASE_INSENSITIVE_ORDER).thenComparing(Asset::name, String.CASE_INSENSITIVE_ORDER));
+            .thenComparing(Asset::group, labels).thenComparing(Asset::name, labels).thenComparing(Asset::key));
+        return list;
+    }
+
+    private void drawAssets(long photo, boolean profiles, JSONArray input) {
+        List<Asset> list = assetRows(input);
         int offset = profiles ? 0 : 1;
         int title = profiles ? R.string.look_profiles : R.string.look_presets;
         String[] names = new String[list.size() + offset];
@@ -102,11 +246,7 @@ final class MobileLooks {
         }
         new AlertDialog.Builder(activity).setTitle(title).setItems(names, (d, i) -> {
             if (!profiles && i == 0) {
-                enterName(R.string.look_create_preset, "", name -> selectGroups(groups ->
-                    call("looks.createPreset", photo, r -> {
-                        notifySaved(R.string.look_preset_created);
-                        assets(photo, false);
-                    }, "name", name, "groups", groups)));
+                createPreset(photo, () -> assets(photo, false));
             } else {
                 assetChoices(photo, profiles, list.get(i - offset));
             }

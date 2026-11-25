@@ -33,4 +33,12 @@
     <string name="before_description">Avant la retouche</string>
     <string name="crop">Recadrer</string>
     <string name="reset_crop">Cadrage d’origine</string>
+    <string name="ux_mode_edit">Modifier</string>
+    <string name="ux_mode_presets">Préréglages</string>
+    <string name="ux_mode_repair">Corriger</string>
+    <string name="ux_collapse_tools">Replier les outils</string>
+    <string name="ux_section_actions">Autres options de cet outil</string>
+    <string name="ux_back_adjustments">Retour aux réglages</string>
+    <string name="ux_reset_parameter">Réinitialiser %1$s</string>
+    <string name="ux_reset_parameter_done">%1$s réinitialisé</string>
 </resources>
