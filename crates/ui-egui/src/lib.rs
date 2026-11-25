@@ -88,8 +88,6 @@ pub use widgets::progress;
 pub use widgets::rating;
 pub use widgets::text_field;
 
-#[cfg(target_os = "android")]
-pub mod android;
 mod app;
 mod auto_settings;
 mod caches;

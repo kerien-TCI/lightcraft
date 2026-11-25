@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Photo Lab Android</string>
+    <string name="library">Library</string><string name="settings">Settings</string>
+    <string name="back">Back</string><string name="import_photos">Import photos</string>
+    <string name="empty_title">Your first photo</string><string name="empty_body">Choose one or more photos from your device. Your originals stay untouched.</string>
+    <string name="no_results">No photo matches your search.</string><string name="search">Search by file name</string><string name="more_photos">Show more photos</string>
+    <string name="loading">Loading…</string><string name="opening">Opening photo…</string><string name="importing">Importing photos…</string>
+    <string name="import_result">Imported: %1$d · Already present: %2$d · Not imported: %3$d</string>
+    <string name="import_limit">Only the first %1$d documents were considered.</string>
+    <string name="editor">Edit photo</string><string name="adjustments">Adjustments</string><string name="light">Light</string><string name="color">Color</string><string name="detail">Effects</string>
+    <string name="exposure">Exposure</string><string name="contrast">Contrast</string><string name="highlights">Highlights</string><string name="shadows">Shadows</string><string name="whites">Whites</string><string name="blacks">Blacks</string>
+    <string name="vibrance">Vibrance</string><string name="saturation">Saturation</string><string name="clarity">Clarity</string><string name="dehaze">Dehaze</string><string name="temperature">Temperature</string><string name="tint">Tint</string><string name="sharpness">Sharpness</string>
+    <string name="rotate">Rotate</string><string name="reset">Reset</string><string name="reset_title">Reset this photo?</string><string name="reset_body">This removes adjustments from this photo. The original file will not change.</string>
+    <string name="export">Save JPEG</string><string name="rendering">Preparing JPEG…</string><string name="saving">Saving…</string><string name="saved">JPEG saved.</string><string name="cancelled">Save cancelled. The original is unchanged.</string>
+    <string name="error_library">The library could not be opened. Check available storage and try again.</string>
+    <string name="error_selection">This photo is no longer available in the library.</string>
+    <string name="error_import">The selected files could not be imported.</string>
+    <string name="error_edit">The adjustment could not be saved.</string>
+    <string name="error_export">The JPEG could not be saved. The original is unchanged.</string>
+    <string name="error_unsupported">This photo could not be developed. Try a known-good JPEG or lossless RAW file.</string>
+    <string name="error_nef">This Nikon High Efficiency RAW format cannot be developed. Try lossless-compressed NEF or a JPEG.</string>
+    <string name="error_unavailable">This operation is currently unavailable.</string><string name="retry">Try again</string>
+    <string name="settings_quality">JPEG quality</string><string name="settings_size">Maximum JPEG long edge</string>
+    <string name="settings_privacy">Photos stay on this device. Export creates a new JPEG without location metadata. Removing the app removes its local library, but not your original files or saved JPEGs.</string>
+    <string name="settings_about">About this build</string><string name="about_body">Unofficial native Android edition using the LightCraft engine. This edition focuses on photo import, basic non-destructive editing, and JPEG export. Desktop-only tools are not included.</string>
+    <string name="info">Photo details</string><string name="image_description">Photo preview. Pinch to zoom; double-tap to reset.</string>
+    <string name="language">Language</string><string name="language_system">System default</string><string name="language_fr">Français</string><string name="language_en">English</string>
+    <string name="row_count">%1$d photos</string><string name="pixel_edge">%1$d px</string><string name="visible_value">%1$s: %2$s</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="compare_before">Show before</string>
+    <string name="compare_after">Show after</string>
+    <string name="before_description">Before editing</string>
+    <string name="crop">Crop</string>
+    <string name="reset_crop">Original framing</string>
+</resources>

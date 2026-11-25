@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.kerien_tci.photolab"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.21.1-android.1"
+        versionCode = 2
+        versionName = "0.21.1-android.2"
     }
 
     sourceSets {
@@ -46,12 +46,6 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
     namespace = 'ai.storyteller.lightcraft'
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    // GameActivity (not NativeActivity): eframe's Android backend needs it for input and IME.
-    implementation "androidx.games:games-activity:4.4.0"
 }
 
 // Package the source and embedded-asset notices alongside the binary.

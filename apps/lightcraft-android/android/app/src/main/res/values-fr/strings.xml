@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Photo Lab Android</string>
+    <string name="library">Bibliothèque</string><string name="settings">Réglages</string>
+    <string name="back">Retour</string><string name="import_photos">Importer des photos</string>
+    <string name="empty_title">Ta première photo</string><string name="empty_body">Choisis une ou plusieurs photos sur ton appareil. Les originaux restent intacts.</string>
+    <string name="no_results">Aucune photo ne correspond à la recherche.</string><string name="search">Rechercher par nom de fichier</string><string name="more_photos">Afficher plus de photos</string>
+    <string name="loading">Chargement…</string><string name="opening">Ouverture de la photo…</string><string name="importing">Importation des photos…</string>
+    <string name="import_result">Importées : %1$d · Déjà présentes : %2$d · Non importées : %3$d</string>
+    <string name="import_limit">Seuls les %1$d premiers fichiers ont été pris en compte.</string>
+    <string name="editor">Retoucher</string><string name="adjustments">Ajustements</string><string name="light">Lumière</string><string name="color">Couleur</string><string name="detail">Effets</string>
+    <string name="exposure">Exposition</string><string name="contrast">Contraste</string><string name="highlights">Hautes lumières</string><string name="shadows">Ombres</string><string name="whites">Blancs</string><string name="blacks">Noirs</string>
+    <string name="vibrance">Vibrance</string><string name="saturation">Saturation</string><string name="clarity">Clarté</string><string name="dehaze">Correction du voile</string><string name="temperature">Température</string><string name="tint">Teinte</string><string name="sharpness">Netteté</string>
+    <string name="rotate">Pivoter</string><string name="reset">Réinitialiser</string><string name="reset_title">Réinitialiser cette photo ?</string><string name="reset_body">Les ajustements de cette photo seront effacés. Le fichier original ne sera pas modifié.</string>
+    <string name="export">Enregistrer en JPEG</string><string name="rendering">Préparation du JPEG…</string><string name="saving">Enregistrement…</string><string name="saved">JPEG enregistré.</string><string name="cancelled">Enregistrement annulé. L’original est intact.</string>
+    <string name="error_library">Impossible d’ouvrir la bibliothèque. Vérifie l’espace disponible et réessaie.</string>
+    <string name="error_selection">Cette photo n’est plus disponible dans la bibliothèque.</string>
+    <string name="error_import">Impossible d’importer les fichiers sélectionnés.</string>
+    <string name="error_edit">Impossible d’enregistrer cet ajustement.</string>
+    <string name="error_export">Impossible d’enregistrer le JPEG. L’original est intact.</string>
+    <string name="error_unsupported">Impossible de développer cette photo. Essaie un JPEG ou un RAW sans perte.</string>
+    <string name="error_nef">Impossible de développer ce RAW Nikon haute efficacité. Essaie un NEF compressé sans perte ou un JPEG.</string>
+    <string name="error_unavailable">Cette opération n’est pas disponible pour le moment.</string><string name="retry">Réessayer</string>
+    <string name="settings_quality">Qualité JPEG</string><string name="settings_size">Côté long maximal du JPEG</string>
+    <string name="settings_privacy">Les photos restent sur cet appareil. L’export crée un nouveau JPEG sans données de localisation. Désinstaller l’application supprime sa bibliothèque locale, pas tes originaux ni tes JPEG enregistrés.</string>
+    <string name="settings_about">À propos de cette version</string><string name="about_body">Version Android native non officielle utilisant le moteur LightCraft. Elle couvre l’import, les retouches non destructives de base et l’export JPEG. Les outils réservés à la version ordinateur ne sont pas inclus.</string>
+    <string name="info">Infos de la photo</string><string name="image_description">Aperçu de la photo. Pince pour zoomer et touche deux fois pour revenir à la vue entière.</string>
+    <string name="language">Langue</string><string name="language_system">Langue du système</string><string name="language_fr">Français</string><string name="language_en">English</string>
+    <string name="row_count">%1$d photos</string><string name="pixel_edge">%1$d px</string><string name="visible_value">%1$s : %2$s</string>
+    <string name="undo">Annuler la retouche</string>
+    <string name="redo">Rétablir la retouche</string>
+    <string name="compare_before">Voir avant</string>
+    <string name="compare_after">Voir après</string>
+    <string name="before_description">Avant la retouche</string>
+    <string name="crop">Recadrer</string>
+    <string name="reset_crop">Cadrage d’origine</string>
+</resources>
