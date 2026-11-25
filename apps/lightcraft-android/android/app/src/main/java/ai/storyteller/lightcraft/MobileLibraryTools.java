@@ -55,11 +55,20 @@ final class MobileLibraryTools {
     private boolean favorites;
 
     private final Consumer<JSONArray> workflows;
-    MobileLibraryTools(Activity context, Request request, Runnable refresh, Consumer<JSONArray> workflows) {
+    private final java.util.function.LongConsumer smartAlbums;
+    MobileLibraryTools(Activity context, Request request, Runnable refresh, Consumer<JSONArray> workflows, java.util.function.LongConsumer smartAlbums) {
         this.context = context;
         this.request = request;
         this.refresh = refresh;
-        this.workflows=workflows;
+        this.workflows=workflows; this.smartAlbums=smartAlbums;
+    }
+
+    void resetCatalogue() {
+        selected.clear();
+        selecting=false;
+        album=-1;
+        albumTitle="";
+        flag="";colour="";sort="";minimum=0;favorites=false;
     }
 
     void save(Bundle state) {
@@ -334,7 +343,8 @@ final class MobileLibraryTools {
                     else{JSONObject a=albums.get(i-1);album=a.optLong("id",-1);albumTitle=albumName(a);}
                     updateToolbar();refresh.run();
                 }).setNegativeButton(android.R.string.cancel,null)
-                .setNeutralButton(R.string.ct_manage_albums,(d,w)->manageAlbums(rows)).show();
+                .setNeutralButton(R.string.ct_manage_albums,(d,w)->manageAlbums(rows))
+                .setPositiveButton(R.string.smart_create,(d,w)->smartAlbums.accept(-1)).show();
         });
     }
 
@@ -389,10 +399,12 @@ final class MobileLibraryTools {
             JSONObject a=entries.get(ix-2);
             long id=a.optLong("id",-1);
             String[] choices=a.optBoolean("folder") ? names(R.string.ct_rename_album,R.string.ct_move_album,R.string.ct_new_album,R.string.ct_new_folder) :
+                a.optBoolean("smart") ? names(R.string.ct_rename_album,R.string.ct_move_album,R.string.smart_edit) :
                 names(R.string.ct_rename_album,R.string.ct_move_album);
             new AlertDialog.Builder(context).setTitle(albumName(a)).setItems(choices,(child,n)->{
                 if(n==0)nameAlbum(a,-1,a.optBoolean("folder"),null);
                 else if(n==1)chooseFolder(all,id,p->apply("library_move_album",obj("album",id,"parent",nullableId(p))));
+                else if(a.optBoolean("smart")) smartAlbums.accept(id);
                 else nameAlbum(null,id,n==3,null);
             }).setNegativeButton(android.R.string.cancel,null).show();
         }).setNegativeButton(android.R.string.cancel,null).show();

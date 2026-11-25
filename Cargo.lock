@@ -3961,6 +3961,7 @@ dependencies = [
  "lightcraft-develop",
  "lightcraft-engine",
  "lightcraft-merge",
+ "lightcraft-preview",
  "lightcraft-raster",
  "rayon",
  "serde_json",

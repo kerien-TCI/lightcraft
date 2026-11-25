@@ -32,6 +32,7 @@ use serde_json::{Map, Value, json};
 
 use crate::media::RenderJob;
 use crate::originals::OriginalGuard;
+use crate::slide_template::SlideLook;
 use crate::slide_title::TitleCompose;
 use crate::slideshow::{SLIDE_MAX, SLIDE_MIN, Title};
 use crate::{Session, export::ExportFormat, export::ExportOptions};
@@ -279,9 +280,15 @@ fn sized(ratio: f64, long: usize) -> (usize, usize) {
 
 /// Read the session: the slides, their render jobs and durations, the output size.
 pub fn prepare(s: &mut Session, p: &Value) -> Result<Prepared, String> {
+    let look = SlideLook::of(s);
+    prepare_with_look(s, p, &look)
+}
+
+/// Prepare a job using caller-local slideshow settings, without changing library preferences.
+pub fn prepare_with_look(s: &mut Session, p: &Value, look: &SlideLook) -> Result<Prepared, String> {
     let request = Request::parse(p)?;
     let settings = &request.settings;
-    let ratio = s.slide_layout.aspect.ratio(16.0 / 9.0);
+    let ratio = look.layout.aspect.ratio(16.0 / 9.0);
     let (width, height) = match settings.format {
         Format::Video => {
             let h = settings.size & !1;
@@ -299,19 +306,19 @@ pub fn prepare(s: &mut Session, p: &Value) -> Result<Prepared, String> {
     if ids.len() > MAX_SLIDES {
         return Err(format!("a slideshow export takes at most {MAX_SLIDES} photos; this view has {}", ids.len()));
     }
-    let play = s.slideshow.clone().sanitized();
-    let (intro, ending) = s.slide_titles.durations(play.slide_duration);
+    let play = look.playback.clone().sanitized();
+    let (intro, ending) = look.titles.durations(play.slide_duration);
     let clamp = |d: f64| if d.is_finite() { d.clamp(SLIDE_MIN, SLIDE_MAX) } else { play.slide_duration };
-    let layout = s.slide_layout.clone().sanitized();
+    let layout = look.layout.clone().sanitized();
     let mut warnings = Vec::new();
     let mut slides = Vec::with_capacity(ids.len() + 2);
-    let title = |s: &Session, t: Title, d: f64| Slide {
-        source: Source::Title { title: t, compose: s.title_compose(t, width, height) },
+    let title = |t: Title, d: f64| Slide {
+        source: Source::Title { title: t, compose: Arc::new(TitleCompose::new(&look.titles, &look.overlays, t, width, height)) },
         duration: clamp(d),
         fade: 0.0,
     };
     if let Some(d) = intro {
-        slides.push(title(s, Title::Intro, d));
+        slides.push(title(Title::Intro, d));
     }
     for id in ids {
         let Some(photo) = s.catalog.photo(id).cloned() else {
@@ -327,7 +334,7 @@ pub fn prepare(s: &mut Session, p: &Value) -> Result<Prepared, String> {
                 continue;
             }
         };
-        let compose = s.slide_compose(&layout, width, height, Some(id));
+        let compose = s.slide_compose_with(&layout, &look.overlays, width, height, Some(id));
         slides.push(Slide {
             source: Source::Photo { name: photo.file_name.clone(), job: Box::new(job.with_slide(compose)) },
             duration: play.slide_duration,
@@ -338,7 +345,7 @@ pub fn prepare(s: &mut Session, p: &Value) -> Result<Prepared, String> {
         return Err("none of the photos can be exported".into());
     }
     if let Some(d) = ending {
-        slides.push(title(s, Title::Ending, d));
+        slides.push(title(Title::Ending, d));
     }
     // the transition into each slide after the first: the fade, never longer than the slide
     for x in slides.iter_mut().skip(1) {

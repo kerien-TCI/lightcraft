@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="migration_title">Desktop LightCraft libraries</string>
+    <string name="migration_choose">Copy a desktop library</string>
+    <string name="migration_default">This phone\'s original library</string>
+    <string name="migration_name">Name of the copy (optional)</string>
+    <string name="migration_untitled">Imported library</string>
+    <string name="migration_help">Quit LightCraft on the computer, then copy the whole library folder to the phone. Choose the folder containing catalog.snap, catalog.log and Originals. It must contain every original referenced in the catalog. The source is read-only and your current library is kept separately. Lightroom catalogs and custom color profiles are not supported by this transfer.</string>
+    <string name="migration_pick">Choose the library folder</string>
+    <string name="migration_copying">Copying the library and originals…</string>
+    <string name="migration_validate">Checking catalog and originals…</string>
+    <string name="migration_complete">Separate library created</string>
+    <string name="migration_report">%1$s
+
+Photo records: %2$d
+Albums and folders: %3$d
+Original files: %4$d
+
+Your previous library has not changed. Desktop paths, cache and export preferences are not transferred.</string>
+    <string name="migration_unhashed">%1$d original file(s) were checked by filename and size only because the catalog had no content fingerprint.</string>
+    <string name="migration_open_copy">Open the copy</string>
+    <string name="migration_incomplete">Choose a complete LightCraft library folder with catalog.snap, catalog.log and Originals. A Lightroom .lrcat or a backup with no originals cannot be opened here.</string>
+    <string name="migration_scope">The catalog points outside its own Originals folder, or contains an unsafe or ambiguous reference. Collect all linked originals into one native LightCraft library before copying it here.</string>
+    <string name="migration_damaged">The catalog or its journal is damaged or inconsistent. On the computer, open it with LightCraft, save, quit and copy the whole folder again.</string>
+    <string name="migration_missing">At least one original or referenced subfolder is absent. Transfer the entire library and its Originals tree. Nothing has been added to the current library.</string>
+    <string name="migration_mismatch">An original differs from the size or content recorded in the catalog, or cannot be identified. Verify the exported originals before trying again.</string>
+    <string name="migration_limit">This transfer exceeds the mobile limits: 4 GiB total, 512 MiB per original, 32 MiB for each catalog file, and at most 12,000 entries. Use a smaller self-contained project library.</string>
+    <string name="migration_profiles">This project uses a custom color profile. Transfer without that profile would change the rendering, so this version has refused it.</string>
+    <string name="migration_open_error">Unable to switch libraries. The current library was kept. Check available storage or close any pending task before trying again.</string>
+    <string name="migration_changed">During the copy a file changed or was still syncing. Quit desktop LightCraft, let the copy finish, then select the folder again.</string>
+    <string name="migration_io">Could not complete the copy. Check storage space and read access. Your current library and source folder were not replaced.</string>
+    <string name="migration_fallback">The chosen desktop library could not be opened. The original phone library is still available; no files were removed.</string>
+</resources>

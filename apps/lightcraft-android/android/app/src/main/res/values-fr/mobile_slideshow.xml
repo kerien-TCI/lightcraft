@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="slide_workspace">Diaporama</string>
+    <string name="slide_template">Modèle visuel</string>
+    <string name="slide_aspect">Format des diapositives</string>
+    <string name="slide_order">Ordre des photos</string>
+    <string name="slide_duration">Durée par diapositive</string>
+    <string name="slide_fade">Durée de la transition</string>
+    <string name="slide_fade_color">Style de transition</string>
+    <string name="slide_background">Fond des diapositives</string>
+    <string name="slide_margin">Marges autour des photos</string>
+    <string name="slide_fill">Remplir le cadre (recadre les bords)</string>
+    <string name="slide_manual">Défilement manuel</string>
+    <string name="slide_repeat">Lire en boucle</string>
+    <string name="slide_ahead">Précharger la diapositive suivante</string>
+    <string name="slide_intro">Titre d’ouverture (facultatif)</string>
+    <string name="slide_ending">Titre de fin (facultatif)</string>
+    <string name="slide_play">Lancer</string>
+    <string name="slide_pause">Mettre en pause</string>
+    <string name="slide_previous">Diapositive précédente</string>
+    <string name="slide_next">Diapositive suivante</string>
+    <string name="slide_return">Revenir aux réglages du diaporama</string>
+    <string name="slide_controls">Afficher ou masquer les commandes du diaporama</string>
+    <string name="slide_loading">Préparation de la diapositive…</string>
+    <string name="slide_image_failed">Impossible d’afficher cette diapositive. Passez à la suivante.</string>
+    <string name="slide_failed">Impossible de terminer le diaporama.</string>
+    <string name="slide_position">%1$d / %2$d</string>
+    <string name="slide_export">Exporter le diaporama</string>
+    <string name="slide_export_action">Exporter</string>
+    <string name="slide_format">Format d’export</string>
+    <string name="slide_size">Définition</string>
+    <string name="slide_quality">Qualité d’export</string>
+    <string name="slide_pdf_full">Ouvrir le PDF en mode présentation si le lecteur le permet</string>
+    <string name="slide_pdf_hint">Une page PDF par diapositive, avec la durée d’affichage pour les lecteurs compatibles.</string>
+    <string name="slide_jpeg_hint">Choisissez où créer un nouveau dossier de JPEG numérotés.</string>
+    <string name="slide_video_hint">Vidéo AV1 à 24 i/s, sans son. Jusqu’à 24 photos et 2 minutes. L’encodage peut prendre un moment.</string>
+    <string name="slide_build">Préparer</string>
+    <string name="slide_preparing">Création des diapositives…</string>
+    <string name="slide_wait_video">Encodage AV1 sur cet appareil…</string>
+    <string name="slide_cancel_wait">Arrêt après le traitement de l’image en cours…</string>
+    <string name="slide_cancelled">Export du diaporama annulé.</string>
+    <string name="slide_busy">Un export de diaporama est déjà en cours.</string>
+    <string name="slide_selection">Sélectionnez de 1 à 80 photos pour créer un diaporama.</string>
+    <string name="slide_limit">Ce diaporama dépasse la limite d’export sur mobile. Essayez avec moins de photos, une durée plus courte ou une définition inférieure.</string>
+    <string name="slide_saved">Diaporama enregistré.</string>
+    <string name="slide_jpeg_saved">JPEG numérotés enregistrés dans un nouveau dossier.</string>
+    <string name="slide_save_failed">Impossible d’enregistrer le diaporama à cet emplacement. Essayez un autre dossier dans Fichiers.</string>
+    <string name="slide_jpeg_save_failed">Impossible d’enregistrer toute la séquence JPEG. Certains fichiers numérotés peuvent se trouver dans le nouveau dossier du diaporama. Aucune photo existante n’a été remplacée.</string>
+    <string-array name="slide_templates">
+        <item>Noir sobre</item>
+        <item>Plein cadre</item>
+        <item>Mur de galerie</item>
+        <item>Écran cinéma</item>
+        <item>Données de prise de vue</item>
+    </string-array>
+    <string-array name="slide_aspects">
+        <item>Selon l’écran (export 16:9)</item>
+        <item>16:9</item>
+        <item>4:3</item>
+    </string-array>
+    <string-array name="slide_orders">
+        <item>Ordre de la sélection</item>
+        <item>Ordre inverse</item>
+        <item>Aléatoire (lecture uniquement)</item>
+    </string-array>
+    <string-array name="slide_durations">
+        <item>2 s</item>
+        <item>4 s</item>
+        <item>6 s</item>
+        <item>10 s</item>
+    </string-array>
+    <string-array name="slide_fades">
+        <item>Coupe</item>
+        <item>0,5 s</item>
+        <item>1 s</item>
+        <item>2 s</item>
+    </string-array>
+    <string-array name="slide_fade_colors">
+        <item>Fondu enchaîné</item>
+        <item>Fondu au noir</item>
+        <item>Fondu au blanc</item>
+    </string-array>
+    <string-array name="slide_backgrounds">
+        <item>Selon le modèle</item>
+        <item>Noir</item>
+        <item>Blanc</item>
+        <item>Gris anthracite</item>
+    </string-array>
+    <string-array name="slide_margins">
+        <item>Selon le modèle</item>
+        <item>0 %</item>
+        <item>5 %</item>
+        <item>10 %</item>
+    </string-array>
+    <string-array name="slide_formats">
+        <item>Présentation PDF</item>
+        <item>Séquence JPEG</item>
+    </string-array>
+    <string-array name="slide_formats_all">
+        <item>Présentation PDF</item>
+        <item>Séquence JPEG</item>
+        <item>Vidéo AV1 MP4</item>
+        <item>Vidéo AV1 WebM</item>
+    </string-array>
+    <string-array name="slide_sizes">
+        <item>1024 px</item>
+        <item>1920 px</item>
+    </string-array>
+    <string-array name="slide_video_sizes">
+        <item>360p</item>
+        <item>480p</item>
+        <item>720p</item>
+    </string-array>
+    <string-array name="slide_qualities">
+        <item>Compacte</item>
+        <item>Élevée</item>
+        <item>Maximale</item>
+    </string-array>
+    <plurals name="slide_selected">
+        <item quantity="one">%d photo sélectionnée</item>
+        <item quantity="other">%d photos sélectionnées</item>
+    </plurals>
+    <plurals name="slide_skipped">
+        <item quantity="one">%d diapositive n’a pas pu être créée.</item>
+        <item quantity="other">%d diapositives n’ont pas pu être créées.</item>
+    </plurals>
+</resources>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="migration_title">Bibliothèques LightCraft ordinateur</string>
+    <string name="migration_choose">Copier une bibliothèque ordinateur</string>
+    <string name="migration_default">Bibliothèque d’origine de ce téléphone</string>
+    <string name="migration_name">Nom de la copie (facultatif)</string>
+    <string name="migration_untitled">Bibliothèque importée</string>
+    <string name="migration_help">Quitte LightCraft sur l’ordinateur, puis copie tout le dossier de bibliothèque sur le téléphone. Sélectionne le dossier qui contient catalog.snap, catalog.log et Originals. Il doit contenir chaque original référencé. La source reste en lecture seule et ta bibliothèque actuelle reste séparée. Ce transfert ne prend pas en charge les catalogues Lightroom ni les profils colorimétriques personnalisés.</string>
+    <string name="migration_pick">Sélectionner le dossier de bibliothèque</string>
+    <string name="migration_copying">Copie de la bibliothèque et des originaux…</string>
+    <string name="migration_validate">Vérification du catalogue et des originaux…</string>
+    <string name="migration_complete">Bibliothèque séparée créée</string>
+    <string name="migration_report">%1$s
+
+Fiches photo : %2$d
+Albums et dossiers : %3$d
+Fichiers originaux : %4$d
+
+Ta bibliothèque précédente n’a pas changé. Les chemins, le cache et les préférences d’export de l’ordinateur ne sont pas transférés.</string>
+    <string name="migration_unhashed">Pour %1$d fichier(s) original(aux), seuls le nom et la taille ont pu être contrôlés : le catalogue ne contient pas leur empreinte de contenu.</string>
+    <string name="migration_open_copy">Ouvrir la copie</string>
+    <string name="migration_incomplete">Choisis un dossier LightCraft complet avec catalog.snap, catalog.log et Originals. Un fichier Lightroom .lrcat ou une sauvegarde sans originaux ne convient pas ici.</string>
+    <string name="migration_scope">Le catalogue pointe hors de son propre dossier Originals, ou contient un chemin non sûr ou ambigu. Regroupe tous les originaux liés dans une seule bibliothèque LightCraft avant de la copier ici.</string>
+    <string name="migration_damaged">Le catalogue ou son journal est endommagé ou incohérent. Sur l’ordinateur, ouvre-le dans LightCraft, enregistre, quitte, puis recopie le dossier complet.</string>
+    <string name="migration_missing">Il manque au moins un original ou un sous-dossier référencé. Transfère toute la bibliothèque et son dossier Originals. Rien n’a été ajouté à la bibliothèque actuelle.</string>
+    <string name="migration_mismatch">Un original ne correspond pas à la taille ou au contenu enregistré dans le catalogue, ou ne peut pas être identifié. Vérifie les originaux transférés avant de réessayer.</string>
+    <string name="migration_limit">Ce transfert dépasse les limites mobiles : 4 Gio au total, 512 Mio par original, 32 Mio par fichier de catalogue et 12 000 éléments. Utilise une bibliothèque autonome plus petite.</string>
+    <string name="migration_profiles">Ce projet utilise un profil colorimétrique personnalisé. Le transfert sans ce profil modifierait le rendu : cette version l’a donc refusé.</string>
+    <string name="migration_open_error">Impossible de changer de bibliothèque. La bibliothèque actuelle a été conservée. Vérifie l’espace libre ou attends la fin des opérations en cours.</string>
+    <string name="migration_changed">Un fichier a changé ou était encore en cours de synchronisation pendant la copie. Quitte LightCraft sur l’ordinateur, laisse la copie se terminer, puis resélectionne le dossier.</string>
+    <string name="migration_io">Impossible de terminer la copie. Vérifie l’espace libre et l’accès en lecture. Ni ta bibliothèque actuelle ni le dossier source n’ont été remplacés.</string>
+    <string name="migration_fallback">Impossible d’ouvrir la bibliothèque ordinateur choisie. La bibliothèque d’origine du téléphone reste accessible. Aucun fichier n’a été supprimé.</string>
+</resources>

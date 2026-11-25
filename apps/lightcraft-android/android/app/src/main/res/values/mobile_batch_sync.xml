@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bs_tools">Batch synchronization</string>
+    <string name="bs_copy_edits">Synchronize edits</string>
+    <string name="bs_copy_meta">Synchronize metadata</string>
+    <string name="bs_source">Choose the source photo</string>
+    <string name="bs_from">Source: %s</string>
+    <string name="bs_light">Light and HDR</string>
+    <string name="bs_curve">Tone curves</string>
+    <string name="bs_color">Color</string>
+    <string name="bs_mixer">Color mixer and point color</string>
+    <string name="bs_grading">Color grading</string>
+    <string name="bs_effects">Effects</string>
+    <string name="bs_vignette">Vignette</string>
+    <string name="bs_grain">Grain</string>
+    <string name="bs_wb">White balance</string>
+    <string name="bs_profile">Profile</string>
+    <string name="bs_treatment">Color or monochrome treatment</string>
+    <string name="bs_detail">Detail and enhancement</string>
+    <string name="bs_optics">Optics</string>
+    <string name="bs_geometry">Geometry</string>
+    <string name="bs_calibration">Calibration</string>
+    <string name="bs_crop">Crop and orientation</string>
+    <string name="bs_masks">Local masks</string>
+    <string name="bs_spots">Healing, clone and remove</string>
+    <string name="bs_redeye">Red-eye corrections</string>
+    <string name="bs_blur">Lens blur and its brush</string>
+    <string name="bs_rights">Copyright and usage rights</string>
+    <string name="bs_creator">Creator</string>
+    <string name="bs_description">Title, caption and accessibility text</string>
+    <string name="bs_keywords">Keywords</string>
+    <string name="bs_location">Location name, city, region and country (not GPS)</string>
+    <string name="bs_local_title">Adjustments specific to the source photo</string>
+    <string name="bs_local_warning">These edits use positions from the source. Enable them only for similarly framed photos and check the result.</string>
+    <string name="bs_meta_help">Only checked fields are copied. Location and keywords are not selected automatically. GPS is never copied here.</string>
+    <string name="bs_edits_help">Only checked settings are copied. The source photo and original files stay unchanged.</string>
+    <string name="bs_select_group">Choose at least one group to synchronize.</string>
+    <string name="bs_review">Review</string>
+    <string name="bs_confirm">Confirm synchronization</string>
+    <string name="bs_confirm_body">Source: %1$s\nTargets: %2$s\nGroups: %3$s</string>
+    <string name="bs_replaces_values">The selected fields replace the existing values, even if the source is empty.</string>
+    <string name="bs_apply">Apply</string>
+    <string name="bs_auto">Auto-stack by capture time</string>
+    <string name="bs_auto_help">Set the maximum interval between consecutive photos in a stack. Photos with no capture date or already stacked are ignored.</string>
+    <string name="bs_auto_seconds">Enter 1 to 3600 seconds</string>
+    <string name="bs_auto_empty">No stacks would be created with this interval.</string>
+    <string name="bs_auto_confirm">Create %1$s with %2$s? Maximum gap: %3$d s.</string>
+    <string name="bs_auto_stale">The eligible photo groups have changed. Review again before creating stacks.</string>
+    <string name="bs_auto_done">Photo stacks created.</string>
+    <plurals name="bs_targets">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="bs_changed">
+        <item quantity="one">%d photo updated.</item>
+        <item quantity="other">%d photos updated.</item>
+    </plurals>
+    <plurals name="bs_stacks">
+        <item quantity="one">%d stack</item>
+        <item quantity="other">%d stacks</item>
+    </plurals>
+</resources>

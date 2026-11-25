@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bs_tools">Synchroniser par lot</string>
+    <string name="bs_copy_edits">Synchroniser les retouches</string>
+    <string name="bs_copy_meta">Synchroniser les métadonnées</string>
+    <string name="bs_source">Choisir la photo source</string>
+    <string name="bs_from">Source : %s</string>
+    <string name="bs_light">Lumière et HDR</string>
+    <string name="bs_curve">Courbes de tonalité</string>
+    <string name="bs_color">Couleur</string>
+    <string name="bs_mixer">Mélangeur et couleur ponctuelle</string>
+    <string name="bs_grading">Color grading</string>
+    <string name="bs_effects">Effets</string>
+    <string name="bs_vignette">Vignettage</string>
+    <string name="bs_grain">Grain</string>
+    <string name="bs_wb">Balance des blancs</string>
+    <string name="bs_profile">Profil</string>
+    <string name="bs_treatment">Traitement couleur ou noir et blanc</string>
+    <string name="bs_detail">Détails et amélioration</string>
+    <string name="bs_optics">Optique</string>
+    <string name="bs_geometry">Géométrie</string>
+    <string name="bs_calibration">Étalonnage</string>
+    <string name="bs_crop">Recadrage et orientation</string>
+    <string name="bs_masks">Masques locaux</string>
+    <string name="bs_spots">Corrections, clonage et suppression</string>
+    <string name="bs_redeye">Corrections des yeux rouges</string>
+    <string name="bs_blur">Flou d’objectif et son pinceau</string>
+    <string name="bs_rights">Droits et conditions d’utilisation</string>
+    <string name="bs_creator">Auteur</string>
+    <string name="bs_description">Titre, légende et texte d’accessibilité</string>
+    <string name="bs_keywords">Mots-clés</string>
+    <string name="bs_location">Lieu, ville, région et pays (sans GPS)</string>
+    <string name="bs_local_title">Réglages propres à la photo source</string>
+    <string name="bs_local_warning">Ces retouches utilisent des positions de la photo source. Coche-les uniquement pour des photos cadrées de la même façon, puis vérifie le résultat.</string>
+    <string name="bs_meta_help">Seuls les champs cochés sont copiés. Le lieu et les mots-clés ne sont pas cochés par défaut. Les coordonnées GPS ne sont jamais copiées ici.</string>
+    <string name="bs_edits_help">Seuls les réglages cochés sont copiés. La photo source et les fichiers d’origine restent inchangés.</string>
+    <string name="bs_select_group">Choisis au moins un groupe à synchroniser.</string>
+    <string name="bs_review">Vérifier</string>
+    <string name="bs_confirm">Confirmer la synchronisation</string>
+    <string name="bs_confirm_body">Source : %1$s\nPhotos cibles : %2$s\nGroupes : %3$s</string>
+    <string name="bs_replaces_values">Les champs cochés remplacent les valeurs existantes, même si la source est vide.</string>
+    <string name="bs_apply">Appliquer</string>
+    <string name="bs_auto">Empiler par heure de prise de vue</string>
+    <string name="bs_auto_help">Choisis l’intervalle maximal entre deux prises de vue successives. Les photos sans date de prise de vue ou déjà empilées sont ignorées.</string>
+    <string name="bs_auto_seconds">Saisis de 1 à 3 600 secondes</string>
+    <string name="bs_auto_empty">Aucune pile ne serait créée avec cet intervalle.</string>
+    <string name="bs_auto_confirm">Créer %1$s avec %2$s ? Intervalle maximal : %3$d s.</string>
+    <string name="bs_auto_stale">Les groupes de photos proposés ont changé. Vérifie à nouveau avant de créer les piles.</string>
+    <string name="bs_auto_done">Piles de photos créées.</string>
+    <plurals name="bs_targets">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="bs_changed">
+        <item quantity="one">%d photo modifiée.</item>
+        <item quantity="other">%d photos modifiées.</item>
+    </plurals>
+    <plurals name="bs_stacks">
+        <item quantity="one">%d pile</item>
+        <item quantity="other">%d piles</item>
+    </plurals>
+</resources>

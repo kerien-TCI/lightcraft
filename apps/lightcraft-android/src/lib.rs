@@ -19,9 +19,11 @@ thread_local! {
 }
 
 mod batch_export;
+mod batch_sync;
 mod canvas_tools;
 mod culling_tools;
 mod denoise_tools;
+mod desktop_migration;
 mod develop_tools;
 mod export_tools;
 mod folder_import;
@@ -29,11 +31,15 @@ mod library_tools;
 mod looks;
 mod merge_tools;
 mod print_tools;
+mod slideshow_tools;
+mod smart_albums;
 
 struct Lab {
     root: PathBuf,
     session: Session,
     mobile_merge: merge_tools::MergeState,
+    mobile_show_export: Option<slideshow_tools::Run>,
+    mobile_catalogue_fallback: bool,
 }
 
 type Reply<T> = Result<T, &'static str>;
@@ -45,11 +51,22 @@ fn bytes_json(v: Value) -> Vec<u8> {
 impl Lab {
     fn start(root: &Path) -> Reply<Self> {
         let root = root.canonicalize().map_err(|_| "library")?;
-        let mut session = Session::new().with_fs().with_system_clock();
+        let make_session = || {
+            let mut session = Session::new().with_fs().with_system_clock();
+            session.media.set_budget(192 * 1024 * 1024);
+            session
+        };
         lightcraft_engine::gpu::set_enabled(false);
-        session.media.set_budget(192 * 1024 * 1024);
-        session.open_library(root.join("Library"), false).map_err(|_| "library")?;
-        let mut lab = Self { root, session, mobile_merge: Default::default() };
+        let mut session = make_session();
+        let original = root.join("Library");
+        let target = desktop_migration::active_library(&root);
+        // Keep the preference intact if an imported library is temporarily unavailable.
+        let fallback = desktop_migration::had_preferred_library(&root) && (target == original || session.open_library(&target, false).is_err());
+        if target == original || fallback {
+            session = make_session();
+            session.open_library(&original, false).map_err(|_| "library")?;
+        }
+        let mut lab = Self { root, session, mobile_merge: Default::default(), mobile_show_export: None, mobile_catalogue_fallback: fallback };
         let _ = lab.setup_mobile_denoise();
         Ok(lab)
     }
@@ -158,10 +175,14 @@ impl Lab {
             "list" => Ok(bytes_json(self.mobile_library_page(p))),
             "export_configured" => export_tools::run(self, p),
             "export_original_pair" => batch_export::original_pair(self, p),
+            o if o.starts_with("slide_") => self.mobile_slideshow(o, p),
             "print_render" => self.mobile_print(p).map(bytes_json),
             o if o.starts_with("folder.") => self.folder_import_action(o, p),
             o if o.starts_with("merge_") => self.mobile_merge(o, p).map(bytes_json),
             o if o.starts_with("cull_") => self.mobile_culling(o, p).map(bytes_json),
+            o if o.starts_with("migration.") => self.migration_action(o, p),
+            o if o.starts_with("smart_") => self.mobile_smart_album(o, p).map(bytes_json),
+            o if o.starts_with("sync_") => self.mobile_sync(o, p).map(bytes_json),
             o if o.starts_with("looks.") => self.looks_action(o, p),
             o if o.starts_with("library_") => self.mobile_library(o, p).map(bytes_json),
             o if o.starts_with("noise_") => self.mobile_denoise(o, p).map(bytes_json),

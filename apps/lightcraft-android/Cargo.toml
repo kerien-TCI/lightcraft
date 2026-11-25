@@ -15,14 +15,15 @@ unsafe_code = "deny"
 
 [dependencies]
 lightcraft-catalog = { workspace = true }
+lightcraft-preview = { workspace = true }
 lightcraft-develop = { workspace = true }
 lightcraft-engine = { workspace = true }
+lightcraft-codecs = { workspace = true }
 serde_json = { workspace = true }
 rayon = { workspace = true }
 jni = "0.22"
 
 [dev-dependencies]
 lightcraft-merge = { workspace = true }
-lightcraft-codecs = { workspace = true }
 lightcraft-raster = { workspace = true }
 tempfile = "3"

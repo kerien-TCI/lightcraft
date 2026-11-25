@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="slide_workspace">Slideshow</string>
+    <string name="slide_template">Visual template</string>
+    <string name="slide_aspect">Slide aspect ratio</string>
+    <string name="slide_order">Photo order</string>
+    <string name="slide_duration">Time per slide</string>
+    <string name="slide_fade">Transition duration</string>
+    <string name="slide_fade_color">Transition style</string>
+    <string name="slide_background">Slide background</string>
+    <string name="slide_margin">Photo margins</string>
+    <string name="slide_fill">Fill the photo area (crop edges)</string>
+    <string name="slide_manual">Manual navigation only</string>
+    <string name="slide_repeat">Repeat playback</string>
+    <string name="slide_ahead">Prepare the next slide</string>
+    <string name="slide_intro">Opening title (optional)</string>
+    <string name="slide_ending">Closing title (optional)</string>
+    <string name="slide_play">Play</string>
+    <string name="slide_pause">Pause</string>
+    <string name="slide_previous">Previous slide</string>
+    <string name="slide_next">Next slide</string>
+    <string name="slide_return">Return to slideshow settings</string>
+    <string name="slide_controls">Show or hide slideshow controls</string>
+    <string name="slide_loading">Preparing slide…</string>
+    <string name="slide_image_failed">Could not render this slide. Continue to the next one.</string>
+    <string name="slide_failed">The slideshow could not be completed.</string>
+    <string name="slide_position">%1$d / %2$d</string>
+    <string name="slide_export">Export slideshow</string>
+    <string name="slide_export_action">Export</string>
+    <string name="slide_format">Export format</string>
+    <string name="slide_size">Resolution</string>
+    <string name="slide_quality">Export quality</string>
+    <string name="slide_pdf_full">Ask PDF viewers to start in presentation mode</string>
+    <string name="slide_pdf_hint">One PDF page per slide, with timings for compatible PDF viewers.</string>
+    <string name="slide_jpeg_hint">Choose a location for a new folder of numbered JPEGs.</string>
+    <string name="slide_video_hint">AV1 video, 24 fps, without audio. Up to 24 photos and 2 minutes. It may take a while to encode.</string>
+    <string name="slide_build">Prepare</string>
+    <string name="slide_preparing">Rendering slides…</string>
+    <string name="slide_wait_video">Encoding AV1 on this device…</string>
+    <string name="slide_cancel_wait">Stopping when the current frame is ready…</string>
+    <string name="slide_cancelled">Slideshow export cancelled.</string>
+    <string name="slide_busy">A slideshow export is already running.</string>
+    <string name="slide_selection">Select 1 to 80 photos to make a slideshow.</string>
+    <string name="slide_limit">The slideshow exceeds the mobile export limit. Try fewer photos, a shorter duration or a lower resolution.</string>
+    <string name="slide_saved">Slideshow saved.</string>
+    <string name="slide_jpeg_saved">Numbered JPEGs saved in a new slideshow folder.</string>
+    <string name="slide_save_failed">Could not save the slideshow to this location. Try another location in Files.</string>
+    <string name="slide_jpeg_save_failed">Could not save the whole JPEG sequence. Some numbered files may be in the new slideshow folder. Existing photos were not replaced.</string>
+    <string-array name="slide_templates">
+        <item>Plain black</item>
+        <item>Edge to edge</item>
+        <item>Gallery wall</item>
+        <item>Wide cinema</item>
+        <item>Shooting data</item>
+    </string-array>
+    <string-array name="slide_aspects">
+        <item>Match screen (16:9 export)</item>
+        <item>16:9</item>
+        <item>4:3</item>
+    </string-array>
+    <string-array name="slide_orders">
+        <item>Selection order</item>
+        <item>Reverse order</item>
+        <item>Shuffle (playback only)</item>
+    </string-array>
+    <string-array name="slide_durations">
+        <item>2 s</item>
+        <item>4 s</item>
+        <item>6 s</item>
+        <item>10 s</item>
+    </string-array>
+    <string-array name="slide_fades">
+        <item>Cut</item>
+        <item>0.5 s</item>
+        <item>1 s</item>
+        <item>2 s</item>
+    </string-array>
+    <string-array name="slide_fade_colors">
+        <item>Crossfade</item>
+        <item>Fade through black</item>
+        <item>Fade through white</item>
+    </string-array>
+    <string-array name="slide_backgrounds">
+        <item>Template default</item>
+        <item>Black</item>
+        <item>White</item>
+        <item>Charcoal</item>
+    </string-array>
+    <string-array name="slide_margins">
+        <item>Template default</item>
+        <item>0%</item>
+        <item>5%</item>
+        <item>10%</item>
+    </string-array>
+    <string-array name="slide_formats">
+        <item>PDF presentation</item>
+        <item>JPEG sequence</item>
+    </string-array>
+    <string-array name="slide_formats_all">
+        <item>PDF presentation</item>
+        <item>JPEG sequence</item>
+        <item>AV1 MP4 video</item>
+        <item>AV1 WebM video</item>
+    </string-array>
+    <string-array name="slide_sizes">
+        <item>1024 px</item>
+        <item>1920 px</item>
+    </string-array>
+    <string-array name="slide_video_sizes">
+        <item>360p</item>
+        <item>480p</item>
+        <item>720p</item>
+    </string-array>
+    <string-array name="slide_qualities">
+        <item>Compact</item>
+        <item>High</item>
+        <item>Maximum</item>
+    </string-array>
+    <plurals name="slide_selected">
+        <item quantity="one">%d selected photo</item>
+        <item quantity="other">%d selected photos</item>
+    </plurals>
+    <plurals name="slide_skipped">
+        <item quantity="one">%d slide could not be rendered.</item>
+        <item quantity="other">%d slides could not be rendered.</item>
+    </plurals>
+</resources>

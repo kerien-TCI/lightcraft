@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private static final int BASE = 0xff111721, TILE = 0xff202a38, DARK = 0xff090e16,
         TEXT = 0xfff5f7fa, SUB = 0xffb6c1cf, GOLD = 0xffe8ae68, WARN = 0xffffbeae;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
-    private static final AtomicLong ORDER = new AtomicLong();
+    private static final AtomicLong ORDER = new AtomicLong(), CATALOGUE_EPOCH = new AtomicLong();
     private static final ThreadPoolExecutor WORK = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
         new PriorityBlockingQueue<>());
     private static final LruCache<Long, Bitmap> THUMBNAILS = new LruCache<>(12 * 1024 * 1024) {
@@ -85,6 +85,11 @@ public class MainActivity extends Activity {
     private MobileCullingTools culling;
     private MobileMerge merge;
     private MobilePrint print;
+    private MobileSmartAlbums smartAlbums;
+    private MobileBatchSync batchSync;
+    private MobileSlideshow slideshow;
+    private MobileDesktopMigration migration;
+    private String catalogueId = "default";
     private MobileBatchExport.Request pendingBatch;
     private boolean batching;
     private final Map<Long, JSONObject> libraryRows = new HashMap<>();
@@ -145,7 +150,9 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         prefs = getSharedPreferences("mobile", MODE_PRIVATE);
         developTools = new MobileDevelopTools(this);
-        libraryTools = new MobileLibraryTools(this,this::catalogueRequest,this::refreshCatalogue,this::showWorkflow);
+        smartAlbums = new MobileSmartAlbums(this,(op,params,ok,failed) -> work(0,() -> req(op,params),ok,failed),this::refreshCatalogue);
+        batchSync = new MobileBatchSync(this,this::catalogueRequest,this::refreshCatalogue);
+        libraryTools = new MobileLibraryTools(this,this::catalogueRequest,this::refreshCatalogue,this::showWorkflow,smartAlbums::show);
         culling = new MobileCullingTools(this,this::catalogueRequest,(id,edge,ok,failed) ->
             work(0,() -> decode(engine.request("render",args("id",id,"edge",edge,"quality",77))),ok,e -> failed.run()),this::refreshCatalogue);
         merge = new MobileMerge(this,(op,params,ok,failed) -> work(0,() -> req(op,params),ok,failed),this::refreshCatalogue);
@@ -158,6 +165,21 @@ public class MainActivity extends Activity {
             public JSONObject request(String op,JSONObject params) throws Exception { return req(op,params); }
             public <T> void task(Callable<T> task,Consumer<T> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
             public void feedback(String text,boolean error) { MainActivity.this.feedback(text,error); }
+        });
+        slideshow = new MobileSlideshow(this, new MobileSlideshow.Host() {
+            public byte[] raw(String op,JSONObject params) throws Exception { return engine.request(op,params); }
+            public JSONObject request(String op,JSONObject params) throws Exception { return req(op,params); }
+            public <T> void task(Callable<T> task,Consumer<T> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
+            public void feedback(String text,boolean error) { MainActivity.this.feedback(text,error); }
+        });
+        migration = new MobileDesktopMigration(this,new MobileDesktopMigration.Host() {
+            public void task(Callable<JSONObject> task,Consumer<JSONObject> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
+            public JSONObject request(String op,JSONObject params) throws Exception { return req(op,params); }
+            public void switched(String active) {
+                resetCatalogue(active);
+                showScreen();
+                loadLibrary(true);
+            }
         });
         looks = new MobileLooks(this, new MobileLooks.Host() {
             public void call(String op, JSONObject a, Consumer<JSONObject> accepted) {
@@ -177,7 +199,9 @@ public class MainActivity extends Activity {
         });
         if (saved != null) {
             libraryTools.restore(saved);
+            catalogueId = saved.getString("catalogue", "default");
             print.restoreState(saved);
+            slideshow.restoreState(saved);
             pendingBatch=MobileBatchExport.Request.restore(saved.getString("batch_picker"));
             query = saved.getString("query", "");
             memoryGridRow = saved.getInt("grid");
@@ -204,8 +228,9 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onSaveInstanceState(Bundle b) {
-        libraryTools.save(b); print.saveState(b);
+        libraryTools.save(b); print.saveState(b); slideshow.saveState(b);
         if (pendingBatch!=null) b.putString("batch_picker",pendingBatch.serialize());
+        b.putString("catalogue", catalogueId);
         b.putString("screen", screen); b.putString("return", returnFromSettings);
         b.putString("query", query); b.putInt("grid", grid == null ? memoryGridRow : grid.getFirstVisiblePosition());
         b.putString("tool", section); b.putString("export", pendingExport);
@@ -218,12 +243,19 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() { goBack(); }
 
+    @Override protected void onPause() {
+        if (slideshow!=null) slideshow.pause();
+        super.onPause();
+    }
+
     @Override protected void onDestroy() {
         // A pending edit belongs to the photo even if the Activity is recreated by rotation.
         commitAdjustments();
         if (folders!=null) folders.destroy();
+        if (migration!=null) migration.destroy();
         if (culling!=null) culling.close();
         if (merge!=null) merge.close();
+        if (slideshow!=null) slideshow.destroy();
         dead = true;
         ui.removeCallbacksAndMessages(null);
         super.onDestroy();
@@ -791,6 +823,11 @@ public class MainActivity extends Activity {
         });
         items.addView(quality, lp(MATCH, dp(48)));
         items.addView(button(R.string.language, false, this::chooseLanguage), lp(MATCH, WRAP));
+        items.addView(button(R.string.migration_title, false, () -> {
+            if (!ready || importing || exporting || batching || pendingBatch != null) return;
+            commitAdjustments();
+            migration.show();
+        }), lp(MATCH, WRAP));
         TextView text = label(getString(R.string.settings_privacy), 15, SUB, false);
         text.setPadding(0, dp(16), 0, dp(16)); items.addView(text);
         items.addView(button(R.string.settings_about, false, () -> new AlertDialog.Builder(this)
@@ -825,8 +862,14 @@ public class MainActivity extends Activity {
 
     private void openLibrary() {
         stage(R.string.loading);
-        work(0, () -> req("open", args("root", getFilesDir().getCanonicalPath())), response -> {
-            ready = true; clearStatus();
+        work(0, () -> {
+            req("open", args("root", getFilesDir().getCanonicalPath()));
+            return req("migration.current", new JSONObject());
+        }, response -> {
+            String active = response.optString("active","default");
+            if (!catalogueId.equals(active)) { resetCatalogue(active); showScreen(); }
+            ready = true; clearStatus(); slideshow.ready();
+            if (response.optBoolean("fallback")) feedback(getString(R.string.migration_fallback),true);
             if ("editor".equals(screen)) openPhoto(); else if ("library".equals(screen)) loadLibrary(true);
             // This clears app-owned cache only; an in-flight save surviving Activity recreation is kept.
             String keep = pendingExport;
@@ -845,6 +888,20 @@ public class MainActivity extends Activity {
             retry.setClickable(true); retry.setFocusable(true);
             retry.setOnClickListener(v -> { retry.setOnClickListener(null); openLibrary(); });
         });
+    }
+
+    private void resetCatalogue(String active) {
+        catalogueId=active;
+        CATALOGUE_EPOCH.incrementAndGet();
+        synchronized(THUMBNAILS){THUMBNAILS.evictAll();}
+        ui.removeCallbacks(searchDelay);
+        ui.removeCallbacks(adjustDelay);
+        thumbRequests.clear();failedThumbs.clear();libraryRows.clear();photos.clear();
+        ++listTicket;++previewTicket;++beforeTicket;
+        listLoading=false;photoUsable=false;beforeLoading=false;comparePinned=false;compareHeld=false;
+        screen="library";returnFromSettings="library";query="";memoryGridRow=0;
+        selected=null;currentPreview=null;beforePreview=null;settings=new JSONObject();pendingEdits.clear();
+        libraryTools.resetCatalogue();
     }
 
     private void loadLibrary(boolean reset) {
@@ -885,16 +942,17 @@ public class MainActivity extends Activity {
         commitAdjustments();
         long[] selectedIds=new long[ids.length()];
         for(int i=0;i<ids.length();i++) selectedIds[i]=ids.optLong(i,-1);
-        int[] labels=ids.length()>1?new int[]{R.string.flow_workflows,R.string.flow_batch,R.string.flow_print,R.string.merge_title}
-            :new int[]{R.string.flow_workflows,R.string.flow_batch,R.string.flow_print};
-        CharSequence[] titles=new CharSequence[labels.length];
-        for(int i=0;i<labels.length;i++) titles[i]=getText(labels[i]);
-        new AlertDialog.Builder(this).setTitle(R.string.flow_workflow).setItems(titles,(d,n)->{
-            if(n==0) culling.open(ids);
-            if(n==1) chooseBatch(ids);
-            if(n==2) print.show(selectedIds);
-            if(n==3) merge.show(ids);
-        }).setNegativeButton(android.R.string.cancel,null).show();
+        ArrayList<CharSequence> labels=new ArrayList<>();
+        ArrayList<Runnable> actions=new ArrayList<>();
+        addTool(labels,actions,R.string.flow_workflows,()->culling.open(ids));
+        addTool(labels,actions,R.string.flow_batch,()->chooseBatch(ids));
+        if(ids.length()>1)addTool(labels,actions,R.string.bs_tools,()->batchSync.open(ids));
+        addTool(labels,actions,R.string.flow_print,()->print.show(selectedIds));
+        if(ids.length()>1)addTool(labels,actions,R.string.merge_title,()->merge.show(ids));
+        addTool(labels,actions,R.string.slide_workspace,()->slideshow.show(ids));
+        new AlertDialog.Builder(this).setTitle(R.string.flow_workflow)
+            .setItems(labels.toArray(CharSequence[]::new),(d,n)->actions.get(n).run())
+            .setNegativeButton(android.R.string.cancel,null).show();
     }
 
     private void chooseBatch(JSONArray ids) {
@@ -940,6 +998,8 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (print.onActivityResult(request,result,data)) return;
+        if (slideshow.onActivityResult(request,result,data)) return;
+        if (request == MobileDesktopMigration.REQUEST_TREE) { migration.onTreeResult(result,data);return; }
         if (request == MobileFolderImport.REQUEST_TREE) { folders.onTreeResult(result,data);return; }
         if (request == SAVE_BATCH) {
             useBatchFolder(result==RESULT_OK && data!=null?data.getData():null);return;
@@ -1137,12 +1197,19 @@ public class MainActivity extends Activity {
             Bitmap hit; synchronized(THUMBNAILS){hit=THUMBNAILS.get(photo.id());}
             image.setImageBitmap(hit);
             if(hit==null && !failedThumbs.contains(photo.id()) && thumbRequests.add(photo.id())){
-                work(10, () -> decode(engine.request("render",args("id",photo.id(),"edge",180,"quality",65))), result -> {
+                long epoch=CATALOGUE_EPOCH.get();
+                work(10, () -> {
+                    if (epoch!=CATALOGUE_EPOCH.get()) throw new LabEngine.Failure("selection");
+                    return decode(engine.request("render",args("id",photo.id(),"edge",180,"quality",65)));
+                }, result -> {
+                    if (epoch!=CATALOGUE_EPOCH.get()) return;
                     thumbRequests.remove(photo.id());
                     synchronized(THUMBNAILS){THUMBNAILS.put(photo.id(),result);}
                     if(photo.id()==(Long)tile.getTag()) image.setImageBitmap(result);
                     else if (grid!=null && adapter==this) notifyDataSetChanged();
-                }, error -> { thumbRequests.remove(photo.id()); failedThumbs.add(photo.id()); });
+                }, error -> {
+                    if (epoch==CATALOGUE_EPOCH.get()) { thumbRequests.remove(photo.id()); failedThumbs.add(photo.id()); }
+                });
             }
             return tile;
         }
