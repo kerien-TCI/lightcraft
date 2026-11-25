@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qr_title">Tri</string>
+    <string name="qr_rating">Note</string>
+    <string name="qr_flag">Marqueur</string>
+    <string name="qr_rating_state">Note : %s</string>
+    <string name="qr_flag_state">Marqueur : %s</string>
+    <string name="qr_none">Aucun</string>
+    <string name="qr_picked">Retenue</string>
+    <string name="qr_rejected">Rejetée</string>
+    <string name="qr_zero">Sans étoile</string>
+    <string name="qr_advance">Avance automatique</string>
+    <string name="qr_saving">Enregistrement du choix…</string>
+    <string name="qr_no_photo">Aucune photo à trier.</string>
+    <string name="qr_no_next">Dernière photo : pas de photo suivante.</string>
+    <string name="qr_advance_on">Après enregistrement d’un nouveau choix, passer à la photo suivante.</string>
+    <string name="qr_advance_off">Rester sur cette photo après enregistrement.</string>
+    <plurals name="qr_stars">
+        <item quantity="one">%d étoile</item>
+        <item quantity="other">%d étoiles</item>
+    </plurals>
+</resources>

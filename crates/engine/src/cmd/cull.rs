@@ -3,6 +3,8 @@
 //! each group's best. Scores are kept on the photos (rules / smart albums: `sharpness`,
 //! `bestOfGroup`).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use lightcraft_catalog::{Analysis, Flag, Op, PhotoId};
 use serde_json::{Value, json};
 
@@ -22,6 +24,12 @@ fn secs(iso: &str) -> Option<i64> {
 }
 
 fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
+    analyze_cancellable(s, p, true, &AtomicBool::new(false), &|_| {})
+}
+
+/// The desktop analysis algorithm with optional score-only review and an
+/// interrupt point between sources. A stopped analysis commits nothing.
+pub fn analyze_cancellable(s: &mut Session, p: &Value, commit_results: bool, cancel: &AtomicBool, progress: &dyn Fn(usize)) -> Result<Value> {
     let ids: Vec<PhotoId> = if p.get("ids").is_some() || s.selection.ids.len() > 1 { s.targets(p)? } else { s.visible_cloned() };
     // a photo listed twice is one photo, not a burst of two look-alikes (first occurrence kept)
     let mut seen = std::collections::HashSet::new();
@@ -32,8 +40,22 @@ fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
     // measure (thumbnail-level sources: fast, and enough for focus at 512 px)
     let mut rows: Vec<(PhotoId, Option<i64>, f32, f32, [f32; 64])> = Vec::new();
     let mut failed = Vec::new();
-    for id in ids {
-        match s.source_now(id, crate::media::SourceLevel::Thumb) {
+    for (index, id) in ids.into_iter().enumerate() {
+        if cancel.load(Ordering::Acquire) {
+            return Ok(json!({"cancelled":true}));
+        }
+        let level = crate::media::SourceLevel::Thumb;
+        let source = if commit_results {
+            s.source_now(id, level)
+        } else {
+            // The ordinary source_now path also learns and journals as-shot WB.
+            // A review does not need those facts, and shouldn't change a catalogue.
+            s.catalog.photo(id).cloned().ok_or_else(|| "no such photo".to_string()).and_then(|photo| {
+                let source = s.media.source_ref(&photo, level);
+                crate::memory::in_background(|| source.load_source()).map(|decoded| decoded.image)
+            })
+        };
+        match source {
             Ok(src) => {
                 let t = s.catalog.photo(id).and_then(|p| p.captured.as_deref().and_then(secs));
                 use lightcraft_pipeline::cull;
@@ -41,6 +63,10 @@ fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Err(e) => failed.push(json!([id.0, e])),
         }
+        progress(index + 1);
+    }
+    if cancel.load(Ordering::Acquire) {
+        return Ok(json!({"cancelled":true}));
     }
     // bursts: consecutive (by capture time) look-alike shots
     rows.sort_by_key(|r| (r.1.unwrap_or(i64::MAX), r.0));
@@ -72,6 +98,10 @@ fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
     for (i, (id, _, sharp, clip, _)) in rows.iter().enumerate() {
         let g = group_of[i];
         let is_best = g.is_some_and(|g| best.get(&g).is_some_and(|b| b.0 == i));
+        out.push(json!({"id": id.0, "sharpness": (sharp * 10.0).round() / 10.0, "clipped": clip, "group": g, "best": is_best}));
+        if !commit_results {
+            continue;
+        }
         ops.push(Op::SetAnalysis { id: *id, analysis: Some(Analysis { sharpness: *sharp, clipped: *clip, group: g, best: is_best }) });
         let flag = s.catalog.photo(*id).map(|p| p.flag).unwrap_or_default();
         if reject_below.is_some_and(|t| *sharp < t) && flag != Flag::Reject {
@@ -81,7 +111,9 @@ fn analyze(s: &mut Session, p: &Value) -> Result<Value> {
             ops.push(Op::SetFlag { id: *id, flag: Flag::Pick });
             picked += 1;
         }
-        out.push(json!({"id": id.0, "sharpness": (sharp * 10.0).round() / 10.0, "clipped": clip, "group": g, "best": is_best}));
+    }
+    if cancel.load(Ordering::Acquire) {
+        return Ok(json!({"cancelled":true}));
     }
     if !ops.is_empty() {
         s.commit("Assisted Culling", Op::Batch { ops })?;

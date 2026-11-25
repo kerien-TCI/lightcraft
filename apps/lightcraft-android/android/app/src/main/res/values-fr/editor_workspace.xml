@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ux_filmstrip">Afficher la pellicule</string>
+    <string name="ux_hide_filmstrip">Masquer la pellicule</string>
+    <string name="ux_position">%1$d / %2$d</string>
+    <string name="ux_filmstrip_status">Photo %1$d sur %2$d. Afficher la pellicule</string>
+    <string name="ux_tab_detail">Détail</string>
+    <string name="ux_tab_crop">Recadrer</string>
+    <string name="ux_tab_local">Masques</string>
+    <string name="ux_tab_review">Tri</string>
+    <string name="ux_curves">Courbes</string>
+    <string name="ux_parametric">Tonalité</string>
+    <string name="ux_hdr">HDR</string>
+    <string name="ux_mix">Mélange</string>
+    <string name="ux_grading">Virage</string>
+    <string name="ux_bw">Noir et blanc</string>
+    <string name="ux_point">Couleur du point</string>
+    <string name="ux_looks">Préréglages</string>
+    <string name="ux_effects">Effets</string>
+    <string name="ux_optics">Optique</string>
+    <string name="ux_grain">Grain</string>
+    <string name="ux_vignette">Vignette</string>
+    <string name="ux_blur">Flou</string>
+    <string name="ux_calibration">Calibration</string>
+    <string name="ux_geometry">Géométrie</string>
+    <string name="ux_crop_ratios">Proportions et rotation</string>
+    <string name="ux_more">Plus d’actions</string>
+    <string name="ux_search_toggle">Afficher la recherche</string>
+    <string name="ux_count">%1$d photos</string>
+    <string name="ux_library_review">Trier</string>
+    <string name="ux_decrease">Diminuer</string>
+    <string name="ux_increase">Augmenter</string>
+    <string name="ux_less_value">Diminuer %1$s</string>
+    <string name="ux_more_value">Augmenter %1$s</string>
+</resources>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ac_tools">Assisted culling</string>
+    <string name="ac_limit">Select up to %d photos for an analysis.</string>
+    <string name="ac_invalid_selection">The selected photos are no longer available.</string>
+    <string name="ac_analyze">Analyze sharpness and bursts</string>
+    <string name="ac_similar_selection">Find similar in selection</string>
+    <string name="ac_similar_recent">Find similar in recent imports</string>
+    <string name="ac_source">Choose a reference photo</string>
+    <string name="ac_need_photos">Import another photo before comparing similarity.</string>
+    <string name="ac_reference">Reference: %s</string>
+    <string name="ac_recent_help">This searches the reference plus up to 39 most recently imported photos. Current filters are not changed.</string>
+    <string name="ac_similarity_help">Similarity uses thumbnail composition and tones, not face recognition or subject identity. No markers are applied.</string>
+    <string name="ac_analysis_help">Burst groups use consecutive capture times and visual similarity. Sharpness and clipping thresholds only highlight photos for review.</string>
+    <string name="ac_threshold_sim">Minimum visual similarity (0–100)</string>
+    <string name="ac_threshold_burst_sim">Minimum similarity within a burst (0–100)</string>
+    <string name="ac_threshold_gap">Maximum gap between consecutive photos (0–120 seconds)</string>
+    <string name="ac_threshold_sharp">Review sharpness below (0–100)</string>
+    <string name="ac_threshold_clip">Review clipping at or above (0–100 %)</string>
+    <string name="ac_find">Find similar photos</string>
+    <string name="ac_start">Start</string>
+    <string name="ac_failed">The analysis could not complete. Check that the photos can be opened.</string>
+    <string name="ac_busy">An analysis is already running.</string>
+    <string name="ac_preparing">Preparing preview analysis…</string>
+    <string name="ac_progress">Sources examined: %1$d/%2$d</string>
+    <string name="ac_similar_summary">Resemblance threshold: %1$d %% · Search scope: %2$d photos</string>
+    <string name="ac_analysis_summary">Burst gap: %1$d s · Similarity: %2$d %% · Review focus below %3$d · Review clipping at %4$d %%</string>
+    <string name="ac_estimate">Sharpness is estimated from thumbnail detail. A sharp background can score well even when an athlete is blurred, and clipping can be intentional. Compare or open the photos before deciding.</string>
+    <string name="ac_no_results">No other photos reached this similarity threshold.</string>
+    <string name="ac_close">Close</string>
+    <string name="ac_open">Open in editor</string>
+    <string name="ac_picked">Picked</string>
+    <string name="ac_rejected">Rejected</string>
+    <string name="ac_score_sim">Similarity: %1$s %%</string>
+    <string name="ac_score_focus">Estimated sharpness: %1$s/100 · Clipping: %2$s %%</string>
+    <string name="ac_burst_best">Burst %d — sharpest estimate</string>
+    <string name="ac_burst">Burst %d</string>
+    <string name="ac_below">Check sharpness</string>
+    <string name="ac_clipping">Check clipping</string>
+    <string name="ac_compare">Compare side by side</string>
+    <string name="ac_annotate">Set marker…</string>
+    <string name="ac_pick">Mark as picked</string>
+    <string name="ac_reject">Mark as rejected</string>
+    <string name="ac_clear">Remove marker</string>
+    <string name="ac_confirm_mark">Confirm marker</string>
+    <string name="ac_mark_body">%1$s: %2$s. Only this photo is affected. No file is deleted.</string>
+    <string name="ac_apply">Apply</string>
+    <string name="ac_flag_saved">Marker saved.</string>
+    <string name="ac_flag_failed">This marker could not be updated. Reopen the review to get the current state.</string>
+    <string name="ac_range">Enter a value from %1$d to %2$d.</string>
+    <plurals name="ac_scope_count">
+        <item quantity="one">%d photo in this scope</item>
+        <item quantity="other">%d photos in this scope</item>
+    </plurals>
+    <plurals name="ac_unreadable">
+        <item quantity="one">%d photo could not be analyzed.</item>
+        <item quantity="other">%d photos could not be analyzed.</item>
+    </plurals>
+</resources>

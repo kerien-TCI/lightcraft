@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="filmstrip_previous">Photo précédente</string>
+    <string name="filmstrip_next">Photo suivante</string>
+    <string name="filmstrip_open_photo">Ouvrir %1$s</string>
+    <string name="filmstrip_selected_photo">%1$s, photo affichée</string>
+    <string name="filmstrip_index">%1$d / %2$d</string>
+    <string name="filmstrip_index_unknown_total">%1$d / …</string>
+    <string name="filmstrip_index_unknown_position">— / %1$d</string>
+    <string name="filmstrip_index_unknown">—</string>
+    <string name="filmstrip_index_spoken">Photo %1$d sur %2$d</string>
+    <string name="filmstrip_index_spoken_unknown_total">Photo %1$d ; total inconnu</string>
+    <string name="filmstrip_index_spoken_unknown_position">Position inconnue ; %1$d photos au total</string>
+    <string name="filmstrip_index_spoken_unknown">Position de la photo inconnue</string>
+</resources>

@@ -64,7 +64,7 @@ final class FolderImportPlan {
                 tree.checkpoint();
                 if (entries >= MAX_ENTRIES) { limited = true; break; }
                 entries++;
-                if (item.id() == null || item.id().isEmpty() || item.name() == null || item.name().isBlank()) {
+                if (item.id() == null || item.id().isEmpty() || item.name() == null || item.name().codePoints().allMatch(Character::isWhitespace)) {
                     unsupported++;
                 } else if (item.directory()) {
                     if (dirs.contains(item.id())) continue;

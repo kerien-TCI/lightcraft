@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qr_title">Review</string>
+    <string name="qr_rating">Rating</string>
+    <string name="qr_flag">Flag</string>
+    <string name="qr_rating_state">Rating: %s</string>
+    <string name="qr_flag_state">Flag: %s</string>
+    <string name="qr_none">No flag</string>
+    <string name="qr_picked">Picked</string>
+    <string name="qr_rejected">Rejected</string>
+    <string name="qr_zero">No stars</string>
+    <string name="qr_advance">Auto-advance</string>
+    <string name="qr_saving">Saving choice…</string>
+    <string name="qr_no_photo">No photo to review.</string>
+    <string name="qr_no_next">Last photo: there is no next photo.</string>
+    <string name="qr_advance_on">After saving a new choice, show the next photo.</string>
+    <string name="qr_advance_off">Stay on this photo after saving.</string>
+    <plurals name="qr_stars">
+        <item quantity="one">%d star</item>
+        <item quantity="other">%d stars</item>
+    </plurals>
+</resources>

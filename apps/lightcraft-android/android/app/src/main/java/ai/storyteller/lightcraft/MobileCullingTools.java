@@ -58,6 +58,14 @@ final class MobileCullingTools {
         if (viewer!=null) viewer.dismiss();
     }
 
+    void compareSelection(JSONArray ids) {
+        if(ids==null||ids.length()<2)return;
+        request.call("cull_info",obj("ids",ids),reply->{
+            ArrayList<JSONObject> photos=rows(reply.optJSONArray("photos"));
+            if(photos.size()>=2)compare(photos);
+        });
+    }
+
     void open(long id) { open(new JSONArray().put(id)); }
 
     void open(JSONArray ids) {

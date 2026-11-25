@@ -9,9 +9,9 @@
 //! it would push out of memory what the grid and the loupe are showing.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
-use lightcraft_catalog::PhotoId;
+use lightcraft_catalog::{Catalog, Photo, PhotoId};
 use serde_json::{Value, json};
 
 use super::bad;
@@ -38,6 +38,7 @@ pub struct Search {
     id: PhotoId,
     min: f32,
     filter: bool,
+    scope: Option<Vec<PhotoId>>,
 }
 
 /// A content whose signature isn't known yet, and how to read it: from the first of its photos that
@@ -67,16 +68,35 @@ impl Reads {
 /// The search `p` asks for and what it has to read, once for each content not known yet. No
 /// file-system calls.
 pub fn plan(s: &mut Session, p: &Value) -> Result<(Search, Reads)> {
+    plan_internal(s, p, None)
+}
+
+/// Like the desktop plan, but only for the explicit dataset confirmed by the
+/// caller. A scoped search never replaces the current library filter.
+pub fn plan_scoped(s: &mut Session, p: &Value, photos: &[PhotoId]) -> Result<(Search, Reads)> {
+    let mut seen = std::collections::HashSet::new();
+    let scope = photos.iter().copied().filter(|id| seen.insert(*id)).collect();
+    plan_internal(s, p, Some(scope))
+}
+
+fn candidates<'a>(catalog: &'a Catalog, scope: Option<&'a [PhotoId]>) -> Box<dyn Iterator<Item = &'a Arc<Photo>> + 'a> {
+    match scope {
+        Some(ids) => Box::new(ids.iter().filter_map(|id| catalog.photo(*id)).filter(|p| p.in_library())),
+        None => Box::new(catalog.photos().filter(|p| p.in_library())),
+    }
+}
+
+fn plan_internal(s: &mut Session, p: &Value, scope: Option<Vec<PhotoId>>) -> Result<(Search, Reads)> {
     let id = super::photo_id(p, C)?.or(s.active()).ok_or_else(|| bad(C, "no photo"))?;
     let min = p.get("similarity").and_then(Value::as_f64).unwrap_or(0.8) as f32;
-    let filter = p.get("filter").and_then(Value::as_bool).unwrap_or(true);
+    let filter = scope.is_none() && p.get("filter").and_then(Value::as_bool).unwrap_or(true);
     let photo = s.catalog.photo(id).ok_or_else(|| bad(C, "can't read the photo"))?;
     let my_key = content_key(photo);
     let me =
         (!s.signatures.contains_key(&my_key)).then(|| Content { sources: vec![s.media.source_ref(photo, SourceLevel::Thumb)], key: my_key.clone() });
     let mut rest: Vec<Content> = Vec::new();
     let mut at = std::collections::HashMap::new();
-    for q in s.catalog.photos().filter(|q| q.in_library()) {
+    for q in candidates(&s.catalog, scope.as_deref()) {
         let key = content_key(q);
         // (the searched photo's content is known by the time these are read, or the search has ended)
         if key == my_key || s.signatures.contains_key(&key) {
@@ -91,7 +111,7 @@ pub fn plan(s: &mut Session, p: &Value) -> Result<(Search, Reads)> {
             }
         }
     }
-    Ok((Search { id, min, filter }, Reads { me, rest }))
+    Ok((Search { id, min, filter, scope }, Reads { me, rest }))
 }
 
 /// `content`'s signature, or `None` when none of its photos can be read or `cancel` is set first. A
@@ -113,6 +133,11 @@ fn signature_of(content: &Content, cancel: &AtomicBool) -> Option<[f32; 64]> {
 /// called from the threads doing the reading; once `cancel` is set no further file is started, and
 /// what was read until then comes back. A searched photo that can't be read ends it there.
 pub fn measure(reads: Reads, cancel: &AtomicBool, progress: &(dyn Fn(usize) + Sync)) -> Vec<Signature> {
+    measure_limited(reads, cancel, progress, usize::MAX)
+}
+
+/// Mobile can keep fewer simultaneous decoders without changing scores.
+pub fn measure_limited(reads: Reads, cancel: &AtomicBool, progress: &(dyn Fn(usize) + Sync), max_lanes: usize) -> Vec<Signature> {
     let found = Mutex::new(Vec::with_capacity(reads.len().min(4096)));
     let done = AtomicUsize::new(0);
     let keep = |key: String, v: [f32; 64]| found.lock().unwrap_or_else(PoisonError::into_inner).push((key, v));
@@ -122,7 +147,7 @@ pub fn measure(reads: Reads, cancel: &AtomicBool, progress: &(dyn Fn(usize) + Sy
         done.store(1, Ordering::Relaxed);
         progress(1);
     }
-    let lanes = crate::export::export_parallelism(reads.rest.len());
+    let lanes = crate::export::export_parallelism(reads.rest.len()).min(max_lanes.max(1));
     let queue = Mutex::new(reads.rest.into_iter());
     let work = || {
         while !cancel.load(Ordering::Relaxed) {
@@ -164,7 +189,7 @@ pub fn apply(s: &mut Session, search: &Search) -> Result<Value> {
     let known = s.catalog.photo(search.id).and_then(|photo| s.signatures.get(&content_key(photo)));
     let me = *known.ok_or_else(|| bad(C, "can't read the photo"))?;
     let mut hits: Vec<(PhotoId, f32)> = Vec::new();
-    for q in s.catalog.photos().filter(|q| q.in_library()) {
+    for q in candidates(&s.catalog, search.scope.as_deref()) {
         if let Some(v) = s.signatures.get(&content_key(q)) {
             let sim = lightcraft_pipeline::cull::similarity(&me, v);
             if sim >= search.min {
@@ -173,13 +198,19 @@ pub fn apply(s: &mut Session, search: &Search) -> Result<Value> {
         }
     }
     hits.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let compared =
+        search.scope.as_deref().map(|ids| candidates(&s.catalog, Some(ids)).filter(|q| s.signatures.contains_key(&content_key(q))).count());
     if search.filter {
         s.shelved_filter = None;
         s.filter.only = hits.iter().map(|h| h.0).collect();
         // an empty `only` means "no constraint": no hits is its own state that shows no photos
         s.filter.only_none = s.filter.only.is_empty();
     }
-    Ok(json!({"photos": hits.iter().map(|(i, v)| json!({"id": i.0, "similarity": (v * 1000.0).round() / 1000.0})).collect::<Vec<_>>()}))
+    let mut result = json!({"photos": hits.iter().map(|(i, v)| json!({"id": i.0, "similarity": (v * 1000.0).round() / 1000.0})).collect::<Vec<_>>()});
+    if let Some(compared) = compared {
+        result["compared"] = json!(compared);
+    }
+    Ok(result)
 }
 
 /// Find Similar: photos that look like `id` (signatures from thumbnail-level sources, cached by

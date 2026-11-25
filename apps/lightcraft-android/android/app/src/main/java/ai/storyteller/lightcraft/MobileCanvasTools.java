@@ -542,7 +542,7 @@ final class MobileCanvasTools {
             ArrayList<String> names = new ArrayList<>();
             for (int i = 0; i < effects.length(); i++) {
                 String effect = effects.optString(i);
-                if (!effect.isBlank()) names.add(effect);
+                if (!effect.codePoints().allMatch(Character::isWhitespace)) names.add(effect);
             }
             panel.addView(button(a, R.string.canvas_mask_effect, () ->
                 new AlertDialog.Builder(a).setTitle(R.string.canvas_mask_effect)
@@ -570,7 +570,7 @@ final class MobileCanvasTools {
         for (int i=0;i<labels.length;i++) {
             JSONObject c=components.optJSONObject(i);
             String title = c == null ? "" : c.optString("name", "");
-            if (title.isBlank() || "null".equals(title)) {
+            if (title.codePoints().allMatch(Character::isWhitespace) || "null".equals(title)) {
                 String kind=c == null ? "" : c.optString("type");
                 int k=0;
                 while (k<MASKS.length&&!MASKS[k].equals(kind)) k++;

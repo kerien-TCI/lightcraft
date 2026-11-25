@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private static final int IMPORT = 101, SAVE = 102, SAVE_BATCH = 111;
     private static final int BASE = 0xff111721, TILE = 0xff202a38, DARK = 0xff090e16,
         TEXT = 0xfff5f7fa, SUB = 0xffb6c1cf, GOLD = 0xffe8ae68, WARN = 0xffffbeae;
+    private static final int EDITOR_BG=0xff171819, EDITOR_PANEL=0xff202123, EDITOR_IMAGE=0xff0e0f11;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     private static final AtomicLong ORDER = new AtomicLong(), CATALOGUE_EPOCH = new AtomicLong();
     private static final ThreadPoolExecutor WORK = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
@@ -83,6 +84,7 @@ public class MainActivity extends Activity {
     private MobileLooks looks;
     private MobileFolderImport folders;
     private MobileCullingTools culling;
+    private MobileAssistedCull assistedCull;
     private MobileMerge merge;
     private MobilePrint print;
     private MobileSmartAlbums smartAlbums;
@@ -93,7 +95,17 @@ public class MainActivity extends Activity {
     private MobileBatchExport.Request pendingBatch;
     private boolean batching;
     private final Map<Long, JSONObject> libraryRows = new HashMap<>();
-    private LinearLayout editorPanel;
+    private LinearLayout editorPanel, editorDock, railHolder, filmstripHolder;
+    private MobileEditorRail editorRail;
+    private MobileQuickReview quickReview;
+    private TextView libraryCountLabel;
+    private EditText searchField;
+    private Button libraryReview, filmstripToggle;
+    private final ArrayList<Photo> editorWindow=new ArrayList<>();
+    private final Map<Long,JSONObject> editorRows=new HashMap<>();
+    private int editorWindowStart,editorTotal,libraryTotal,editorRestorePosition=-1,navigationTicket;
+    private String editorFamily="light";
+    private boolean panelOpen,navigationBusy,reviewBusy,advanceAfterReview,showFilmstrip=true,searchVisible;
     private JSONArray controlSchema = new JSONArray();
     private final Map<String, Double> pendingEdits = new HashMap<>();
     private volatile boolean dead;
@@ -117,6 +129,9 @@ public class MainActivity extends Activity {
     private String pendingExport;
     private final Runnable searchDelay = () -> loadLibrary(true);
     private final Runnable adjustDelay = this::commitAdjustments;
+    private final Runnable draftPulse = this::renderSliderDraft;
+    private boolean sliding,draftInFlight;
+    private int draftTicket,draftRevision;
 
     record Photo(long id, String name, int width, int height, String format) {
         static Photo read(JSONObject v) {
@@ -150,11 +165,31 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         prefs = getSharedPreferences("mobile", MODE_PRIVATE);
         developTools = new MobileDevelopTools(this);
+        editorRail = new MobileEditorRail(this);
         smartAlbums = new MobileSmartAlbums(this,(op,params,ok,failed) -> work(0,() -> req(op,params),ok,failed),this::refreshCatalogue);
         batchSync = new MobileBatchSync(this,this::catalogueRequest,this::refreshCatalogue);
         libraryTools = new MobileLibraryTools(this,this::catalogueRequest,this::refreshCatalogue,this::showWorkflow,smartAlbums::show);
         culling = new MobileCullingTools(this,this::catalogueRequest,(id,edge,ok,failed) ->
             work(0,() -> decode(engine.request("render",args("id",id,"edge",edge,"quality",77))),ok,e -> failed.run()),this::refreshCatalogue);
+        assistedCull = new MobileAssistedCull(this,new MobileAssistedCull.Host() {
+            public void request(String op,JSONObject params,Consumer<JSONObject> ok,Runnable failed) {
+                work(0,() -> req(op,params),ok,error -> failed.run());
+            }
+            public void open(long id) {
+                long epoch=CATALOGUE_EPOCH.get();
+                work(0,() -> req("study_photo",args("id",id)),photo -> {
+                    if (epoch==CATALOGUE_EPOCH.get()) openCataloguePhoto(Photo.read(photo));
+                },MainActivity.this::problem);
+            }
+            public void compare(JSONArray ids) { culling.compareSelection(ids); }
+            public void refresh() { refreshCatalogue(); }
+            public void preview(long id,int edge,Consumer<Bitmap> loaded) {
+                long epoch=CATALOGUE_EPOCH.get();
+                work(10,() -> decode(engine.request("render",args("id",id,"edge",edge,"quality",65))),bmp -> {
+                    if (epoch==CATALOGUE_EPOCH.get()) loaded.accept(bmp);
+                },error -> {});
+            }
+        });
         merge = new MobileMerge(this,(op,params,ok,failed) -> work(0,() -> req(op,params),ok,failed),this::refreshCatalogue);
         folders = new MobileFolderImport(this,new MobileFolderImport.Host() {
             public void task(Callable<JSONObject> task,Consumer<JSONObject> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
@@ -206,6 +241,12 @@ public class MainActivity extends Activity {
             query = saved.getString("query", "");
             memoryGridRow = saved.getInt("grid");
             section = saved.getString("tool", "light");
+            editorFamily = saved.getString("editor_family", "light");
+            panelOpen = saved.getBoolean("tool_open",false);
+            showFilmstrip = saved.getBoolean("filmstrip",true);
+            searchVisible = saved.getBoolean("search_visible",false);
+            advanceAfterReview=saved.getBoolean("review_advance",false);
+            editorRestorePosition = saved.getInt("editor_position",-1);
             screen = saved.getString("screen", "library");
             returnFromSettings = saved.getString("return", "library");
             if (saved.getLong("photo", -1) >= 0) {
@@ -231,6 +272,10 @@ public class MainActivity extends Activity {
         libraryTools.save(b); print.saveState(b); slideshow.saveState(b);
         if (pendingBatch!=null) b.putString("batch_picker",pendingBatch.serialize());
         b.putString("catalogue", catalogueId);
+        b.putString("editor_family",editorFamily);
+        b.putBoolean("tool_open",panelOpen);b.putBoolean("filmstrip",showFilmstrip);b.putBoolean("search_visible",searchVisible);b.putBoolean("review_advance",advanceAfterReview);
+        int editorIndex=selected==null?-1:editorLocalIndex(selected.id());
+        b.putInt("editor_position",editorIndex<0?-1:editorWindowStart+editorIndex);
         b.putString("screen", screen); b.putString("return", returnFromSettings);
         b.putString("query", query); b.putInt("grid", grid == null ? memoryGridRow : grid.getFirstVisiblePosition());
         b.putString("tool", section); b.putString("export", pendingExport);
@@ -254,6 +299,7 @@ public class MainActivity extends Activity {
         if (folders!=null) folders.destroy();
         if (migration!=null) migration.destroy();
         if (culling!=null) culling.close();
+        if (assistedCull!=null) assistedCull.close();
         if (merge!=null) merge.close();
         if (slideshow!=null) slideshow.destroy();
         dead = true;
@@ -268,7 +314,7 @@ public class MainActivity extends Activity {
             if ("library".equals(screen) && ready) loadLibrary(true);
         } else if ("editor".equals(screen)) {
             commitAdjustments();
-            ++previewTicket;
+            ++previewTicket;++navigationTicket;navigationBusy=false;
             screen = "library";
             showScreen();
             if (ready) loadLibrary(true);
@@ -286,13 +332,15 @@ public class MainActivity extends Activity {
         grid = null; adapter = null; more = null; preview = null; export = null;
         undo = null; redo = null; compare = null;
         sliders.clear(); toggles.clear(); sliderSpecs.clear(); editorPanel = null;
+        editorDock=null;railHolder=null;filmstripHolder=null;filmstripToggle=null;libraryCountLabel=null;searchField=null;libraryReview=null;quickReview=null;
         Configuration c = getResources().getConfiguration();
         sideBySide = c.screenWidthDp >= 600 || (c.screenWidthDp >= 475 && c.screenWidthDp > c.screenHeightDp);
-        root = stack(BASE);
+        boolean editing="editor".equals(screen) && selected!=null;
+        root = stack(editing?EDITOR_BG:BASE);
         root.setId(R.id.main_screen);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets safe = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-            root.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+            v.setPadding(safe.left, safe.top, safe.right, safe.bottom);
             return insets;
         });
         setContentView(root);
@@ -301,14 +349,35 @@ public class MainActivity extends Activity {
         LinearLayout bar = row();
         bar.setPadding(dp(8), dp(4), dp(8), dp(4));
         bar.setMinimumHeight(dp(52));
-        if (!"library".equals(screen)) bar.addView(button(R.string.back, false, this::goBack), lp(WRAP, WRAP));
-        title = label("", 22, TEXT, true);
+        if(editing) bar.addView(glyph("‹",R.string.back,this::goBack),lp(dp(48),dp(48)));
+        else if (!"library".equals(screen)) bar.addView(button(R.string.back, false, this::goBack), lp(WRAP, WRAP));
+        title = label("", editing?17:22, TEXT, true);
         title.setId(R.id.screen_title);
         title.setAccessibilityHeading(true);
         title.setSingleLine(true); title.setEllipsize(TextUtils.TruncateAt.END);
         title.setPadding(dp(8), 0, dp(4), 0);
         bar.addView(title, new LinearLayout.LayoutParams(0, WRAP, 1));
-        if (!"settings".equals(screen)) {
+        if(editing) {
+            undo=glyph("↶",R.string.undo,()->edit("undo",args("id",selected.id())));
+            redo=glyph("↷",R.string.redo,()->edit("redo",args("id",selected.id())));
+            compare=glyph("◐",R.string.compare_before,()->{comparePinned=!comparePinned;displayComparison();});
+            export=glyph("↑",R.string.export,this::startExport);
+            export.setId(R.id.primary_action);
+            export.setTextColor(GOLD);
+            export.setOnLongClickListener(v->{chooseExport();return true;});
+            for(Button control:new Button[]{undo,redo,compare,export})bar.addView(control,lp(dp(48),dp(48)));
+            export.setEnabled(photoUsable&&!exporting);syncEditorActions();
+            title.setOnLongClickListener(v->{photoInfo();return true;});
+        } else if (!"settings".equals(screen)) {
+            Button searchButton=glyph("⌕",R.string.ux_search_toggle,()->{
+                searchVisible=!searchVisible||!query.isEmpty();showScreen();if(ready)loadLibrary(true);
+                if(searchVisible&&searchField!=null){
+                    EditText field=searchField;field.requestFocus();
+                    field.post(()->{if(field==searchField)((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE))
+                        .showSoftInput(field,InputMethodManager.SHOW_IMPLICIT);});
+                }
+            });
+            bar.addView(searchButton,lp(dp(48),dp(48)));
             Button open = button(R.string.settings, false, () -> {
                 commitAdjustments();
                 if (grid != null) memoryGridRow = grid.getFirstVisiblePosition();
@@ -336,7 +405,9 @@ public class MainActivity extends Activity {
 
     private void drawLibrary(Configuration c) {
         title.setText(R.string.library);
-        EditText search = new EditText(this);
+        libraryCountLabel=label(getString(R.string.ux_count,libraryTotal),13,SUB,false);
+        libraryCountLabel.setPadding(dp(16),0,dp(16),dp(4));root.addView(libraryCountLabel,lp(MATCH,WRAP));
+        EditText search = new EditText(this);searchField=search;
         search.setId(R.id.search_field);
         search.setTextColor(TEXT); search.setHintTextColor(SUB); search.setHint(R.string.search); search.setText(query);
         search.setSingleLine(true); search.setTextSize(16); search.setSelectAllOnFocus(false);
@@ -345,6 +416,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams searchParams = lp(MATCH, WRAP);
         searchParams.setMargins(dp(16), dp(4), dp(16), dp(4));
         root.addView(search, searchParams);
+        search.setVisibility(searchVisible||!query.isEmpty()?View.VISIBLE:View.GONE);
         root.setFocusableInTouchMode(true);
         root.requestFocus();
         search.addTextChangedListener(new TextWatcher() {
@@ -376,10 +448,7 @@ public class MainActivity extends Activity {
             }
             ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(root.getWindowToken(), 0);
             memoryGridRow = grid.getFirstVisiblePosition();
-            selected = photos.get(position); currentPreview = null; photoUsable = false;
-            settings = new JSONObject(); controlSchema = new JSONArray(); section = "light"; screen = "editor";
-            showScreen();
-            if (ready) openPhoto();
+            openCataloguePhoto(photos.get(position));
         });
         grid.setOnItemLongClickListener((a,view,position,id) -> {
             if (position >= photos.size()) return false;
@@ -403,9 +472,19 @@ public class MainActivity extends Activity {
         more = button(R.string.more_photos, false, () -> loadLibrary(false));
         more.setVisibility(View.GONE);
         root.addView(more, lp(MATCH, WRAP));
-        Button add = primary(R.string.import_photos, this::chooseImport);
+        LinearLayout foot=row();
+        Button add=primary(R.string.import_photos,this::chooseImport);
         add.setEnabled(!importing);
-        root.addView(add, footer());
+        foot.addView(add,new LinearLayout.LayoutParams(0,WRAP,2));
+        libraryReview=button(R.string.ux_library_review,false,()->{
+            if(photos.isEmpty())return;
+            int first=grid==null?0:Math.min(photos.size()-1,Math.max(0,grid.getFirstVisiblePosition()));
+            setEditorWindowFromGrid();editorFamily="review";section="review";panelOpen=true;
+            showEditorPhoto(photos.get(first),true);
+        });
+        libraryReview.setEnabled(!photos.isEmpty());
+        foot.addView(libraryReview,new LinearLayout.LayoutParams(0,WRAP,1));
+        root.addView(foot,footer());
         if (memoryGridRow > 0 && memoryGridRow < photos.size()) grid.setSelection(memoryGridRow);
     }
 
@@ -413,52 +492,94 @@ public class MainActivity extends Activity {
         if (selected == null) { screen = "library"; drawLibrary(c); return; }
         title.setText(selected.name());
         title.setContentDescription(getString(R.string.editor) + ": " + selected.name());
-        boolean tall = !sideBySide;
+        boolean wide = sideBySide;
         LinearLayout body = new LinearLayout(this);
-        body.setOrientation(tall ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        body.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         root.addView(body, new LinearLayout.LayoutParams(MATCH, 0, 1));
+        LinearLayout visual = stack(EDITOR_IMAGE);
+        body.addView(visual, wide ? new LinearLayout.LayoutParams(0, MATCH, 1) : new LinearLayout.LayoutParams(MATCH,0,1));
+
+        FrameLayout canvas = new FrameLayout(this);
         preview = new PhotoView(this);
         preview.setId(R.id.editor_preview);
-        preview.setBackgroundColor(DARK);
+        preview.setBackgroundColor(EDITOR_IMAGE);
         preview.setImage(currentPreview, true);
-        LinearLayout.LayoutParams previewParams = tall
-            ? new LinearLayout.LayoutParams(MATCH, 0, 1f)
-            : new LinearLayout.LayoutParams(0, MATCH, 1);
-        FrameLayout canvas = new FrameLayout(this);
-        canvas.addView(preview, new FrameLayout.LayoutParams(MATCH, MATCH));
         preview.setComparisonGesture(() -> compareBefore(true), () -> compareBefore(false));
-        body.addView(canvas, previewParams);
+        preview.setNavigationGesture(this::stepEditor);
+        canvas.addView(preview,new FrameLayout.LayoutParams(MATCH,MATCH));
+        filmstripToggle=glyph("▦",R.string.ux_filmstrip,()->{showFilmstrip=!showFilmstrip;refreshFilmstrip();});
+        FrameLayout.LayoutParams fold=new FrameLayout.LayoutParams(dp(48),dp(48),Gravity.END|Gravity.BOTTOM);
+        fold.setMargins(0,0,dp(6),dp(6));canvas.addView(filmstripToggle,fold);
+        visual.addView(canvas,new LinearLayout.LayoutParams(MATCH,0,1));
 
-        LinearLayout tools = stack(TILE);
-        tools.setId(R.id.tool_panel);
-        body.addView(tools, tall
-            ? new LinearLayout.LayoutParams(MATCH, 0, 1.15f)
-            : lp(dp(Math.max(198, Math.min(400, c.screenWidthDp * 39 / 100))), MATCH));
-        editorPanel = tools;
+        filmstripHolder=stack(EDITOR_BG);
+        visual.addView(filmstripHolder,lp(MATCH,WRAP));
+        refreshFilmstrip();
+
+        editorDock=stack(EDITOR_PANEL);
+        editorDock.setId(R.id.tool_panel);
+        int dockSize = wide ? Math.max(178,Math.min(358,(c.screenWidthDp-68)*47/100))
+            : Math.max(152,Math.min(288,c.screenHeightDp*37/100));
+        body.addView(editorDock,wide ? lp(dp(dockSize),MATCH) : lp(MATCH,dp(dockSize)));
+        editorPanel=editorDock;
+        railHolder=stack(EDITOR_BG);
+        body.addView(railHolder,wide ? lp(dp(72),MATCH) : lp(MATCH,WRAP));
         fillEditorPanel();
+    }
 
-        LinearLayout history = row();
-        FrameLayout.LayoutParams overlay = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.START | Gravity.TOP);
-        overlay.setMargins(dp(4), dp(4), dp(4), 0);
-        undo = glyph("↶", R.string.undo, () -> edit("undo", args("id", selected.id())));
-        redo = glyph("↷", R.string.redo, () -> edit("redo", args("id", selected.id())));
-        compare = glyph("◐", R.string.compare_before, () -> {
-            comparePinned = !comparePinned;
-            displayComparison();
-        });
-        history.addView(undo, lp(dp(48), dp(48))); history.addView(redo, lp(dp(48), dp(48)));
-        history.addView(compare, lp(dp(48), dp(48)));
-        canvas.addView(history, overlay);
-        syncEditorActions();
+    private void refreshFilmstrip() {
+        if (filmstripHolder==null || selected==null) return;
+        filmstripHolder.removeAllViews();
+        int i=editorLocalIndex(selected.id());
+        int position=i<0?0:editorWindowStart+i+1;
+        boolean hasPrev=position>1;
+        boolean hasNext=position>0 && position<editorTotal;
+        if(filmstripToggle!=null){
+            filmstripToggle.setVisibility(position!=0&&editorTotal>1?View.VISIBLE:View.GONE);
+            filmstripToggle.setContentDescription(getString(showFilmstrip?R.string.ux_hide_filmstrip:R.string.ux_filmstrip));
+            filmstripToggle.setSelected(showFilmstrip);
+        }
+        if (showFilmstrip && position!=0 && editorTotal>1) {
+            ArrayList<MobileFilmstrip.Item> window=new ArrayList<>();
+            for(int q=Math.max(0,i-2);q<Math.min(editorWindow.size(),i+3);q++){
+                Photo p=editorWindow.get(q);
+                window.add(new MobileFilmstrip.Item(p.id(),p.name()));
+            }
+            filmstripHolder.addView(MobileFilmstrip.create(this,window,selected.id(),position,editorTotal,
+                hasPrev&&!navigationBusy,hasNext&&!navigationBusy,sideBySide,this::openEditorNeighbor,this::stepEditor,this::requestFilmThumb),lp(MATCH,WRAP));
+        } else {
+            LinearLayout line=row();
+            if(position>0 && editorTotal>1) {
+                Button previous=glyph("‹",R.string.filmstrip_previous,()->stepEditor(-1));
+                previous.setEnabled(hasPrev&&!navigationBusy);line.addView(previous,lp(dp(48),dp(48)));
+            }
+            Button fold=button(R.string.ux_filmstrip,false,()->{showFilmstrip=!showFilmstrip;refreshFilmstrip();});
+            fold.setText(position==0?getString(R.string.ux_filmstrip):getString(R.string.ux_position,position,editorTotal));
+            fold.setContentDescription(position==0?getString(R.string.ux_filmstrip):getString(R.string.ux_filmstrip_status,position,editorTotal));
+            fold.setEnabled(editorTotal>1&&position>0);
+            line.addView(fold,new LinearLayout.LayoutParams(0,WRAP,1));
+            if(position>0 && editorTotal>1) {
+                Button next=glyph("›",R.string.filmstrip_next,()->stepEditor(1));
+                next.setEnabled(hasNext&&!navigationBusy);line.addView(next,lp(dp(48),dp(48)));
+            }
+            line.setVisibility(position>0&&editorTotal>1?View.VISIBLE:View.GONE);
+            filmstripHolder.addView(line,lp(MATCH,WRAP));
+        }
+    }
 
-        LinearLayout actions = row();
-        actions.setPadding(dp(8), dp(2), dp(8), dp(2));
-        actions.addView(button(R.string.crop, false, this::cropPhoto), new LinearLayout.LayoutParams(0, WRAP, 1));
-        actions.addView(button(R.string.mobile_tools, false, this::chooseTool), new LinearLayout.LayoutParams(0, WRAP, 1));
-        export = primary(R.string.export, this::startExport);
-        export.setEnabled(photoUsable && !exporting);
-        actions.addView(export, new LinearLayout.LayoutParams(0, WRAP, 1.25f));
-        root.addView(actions, lp(MATCH, WRAP));
+    private void requestFilmThumb(long id,Consumer<Bitmap> apply) {
+        Bitmap cached;
+        synchronized(THUMBNAILS){cached=THUMBNAILS.get(id);}
+        if(cached!=null){apply.accept(cached);return;}
+        long epoch=CATALOGUE_EPOCH.get();
+        work(10, () -> {
+            if(epoch!=CATALOGUE_EPOCH.get()) throw new LabEngine.Failure("selection");
+            return decode(engine.request("render",args("id",id,"edge",180,"quality",65)));
+        }, bmp -> {
+            if(epoch!=CATALOGUE_EPOCH.get()) return;
+            synchronized(THUMBNAILS){THUMBNAILS.put(id,bmp);}
+            apply.accept(bmp);
+        },e->apply.accept(null));
     }
 
     private Button glyph(String glyph, int label, Runnable action) {
@@ -525,59 +646,115 @@ public class MainActivity extends Activity {
         }
     }
 
+    private record SectionChip(String key,int label) {}
+    private static final java.util.List<MobileEditorRail.Tab> EDITOR_TABS=java.util.List.of(
+        new MobileEditorRail.Tab("light",R.string.light),
+        new MobileEditorRail.Tab("color",R.string.color),
+        new MobileEditorRail.Tab("detail",R.string.ux_tab_detail),
+        new MobileEditorRail.Tab("crop",R.string.ux_tab_crop),
+        new MobileEditorRail.Tab("local",R.string.ux_tab_local),
+        new MobileEditorRail.Tab("review",R.string.ux_tab_review));
+    private static java.util.List<SectionChip> subTools(String family) {
+        return switch(family) {
+            case "light" -> java.util.List.of(new SectionChip("light",R.string.light),new SectionChip("curves_direct",R.string.ux_curves),new SectionChip("curve",R.string.ux_parametric),new SectionChip("hdr",R.string.ux_hdr));
+            case "color" -> java.util.List.of(new SectionChip("color",R.string.color),new SectionChip("mixer",R.string.ux_mix),new SectionChip("grading",R.string.ux_grading),
+                new SectionChip("bwMix",R.string.ux_bw),new SectionChip("pointColor",R.string.ux_point),new SectionChip("profile",R.string.ux_looks));
+            case "detail" -> java.util.List.of(new SectionChip("detail",R.string.ux_tab_detail),new SectionChip("effects",R.string.ux_effects),
+                new SectionChip("optics",R.string.ux_optics),new SectionChip("grain",R.string.ux_grain),new SectionChip("vignette",R.string.ux_vignette),
+                new SectionChip("lensBlur",R.string.ux_blur),new SectionChip("calibration",R.string.ux_calibration));
+            case "crop" -> java.util.List.of(new SectionChip("crop",R.string.ux_tab_crop),new SectionChip("geometry",R.string.ux_geometry));
+            case "local" -> java.util.List.of(new SectionChip("local",R.string.ux_tab_local));
+            default -> java.util.List.of(new SectionChip("review",R.string.ux_tab_review));
+        };
+    }
+    private void selectEditorFamily(String key) {
+        commitAdjustments();
+        if (panelOpen && key.equals(editorFamily)) {panelOpen=false;fillEditorPanel();return;}
+        if (!key.equals(editorFamily)) section=subTools(key).get(0).key();
+        editorFamily=key;panelOpen=true;fillEditorPanel();
+    }
+
     private void fillEditorPanel() {
-        if (editorPanel == null) return;
+        if (editorPanel==null || railHolder==null) return;
         editorPanel.removeAllViews();
-        sliders.clear(); toggles.clear(); sliderSpecs.clear();
-        LinearLayout categories = row();
-        categories.setPadding(dp(8), 0, dp(8), 0);
-        editorPanel.addView(categories, lp(MATCH, WRAP));
-        if (MobileDevelopTools.quick(section)) {
-            category(categories, "light", R.string.light);
-            category(categories, "color", R.string.color);
-            category(categories, "effects", R.string.detail);
+        sliders.clear();toggles.clear();sliderSpecs.clear();quickReview=null;
+        editorPanel.setVisibility(panelOpen?View.VISIBLE:View.GONE);
+        railHolder.removeAllViews();
+        railHolder.addView(editorRail.build(sideBySide,EDITOR_TABS,panelOpen?editorFamily:"",this::selectEditorFamily),
+            sideBySide?lp(MATCH,MATCH):lp(MATCH,WRAP));
+        if(!panelOpen)return;
+        if("review".equals(editorFamily)) {fillReviewPanel();return;}
+        java.util.List<SectionChip> groups=subTools(editorFamily);
+        if(groups.size()>1) {
+            android.widget.HorizontalScrollView rail=new android.widget.HorizontalScrollView(this);
+            rail.setHorizontalScrollBarEnabled(false);
+            LinearLayout row=row();row.setPadding(dp(6),0,dp(6),dp(2));
+            rail.addView(row,lp(WRAP,WRAP));
+            for(SectionChip chip:groups){
+                Button item=button(chip.label(),chip.key().equals(section),()->{
+                    if("curves_direct".equals(chip.key()))canvasTool("curve");else selectToolPanel(chip.key());
+                });
+                item.setMinHeight(dp(48));item.setSelected(chip.key().equals(section));
+                row.addView(item,lp(WRAP,WRAP));
+                if(chip.key().equals(section))rail.post(()->rail.scrollTo(Math.max(0,item.getLeft()-dp(6)),0));
+            }
+            editorPanel.addView(rail,lp(MATCH,WRAP));
+        }
+        ScrollView settingsView=scroll();
+        LinearLayout content=stack(EDITOR_PANEL);
+        content.setPadding(dp(14),dp(4),dp(14),dp(10));
+        if("crop".equals(section)) {
+            panelButton(content,R.string.mobile_free_crop,()->canvasTool("crop"));
+            panelButton(content,R.string.ux_crop_ratios,this::cropPhoto);
+        } else if("local".equals(section)) {
+            panelButton(content,R.string.mobile_masks,()->canvasTool("mask"));
+            panelButton(content,R.string.mobile_remove,()->canvasTool("remove"));
+            panelButton(content,R.string.canvas_eyes,()->canvasTool("eyes"));
         } else {
-            Button basic = button(R.string.back, false, () -> selectToolPanel("light"));
-            basic.setContentDescription(getString(R.string.mobile_basic_tools));
-            categories.addView(basic, lp(WRAP, WRAP));
-            TextView name = label(developTools.title(section), 15, TEXT, true);
-            name.setAccessibilityHeading(true);
-            name.setPadding(dp(8), 0, 0, 0);
-            categories.addView(name, new LinearLayout.LayoutParams(0, WRAP, 1));
+            if("light".equals(section) || "color".equals(section)) {
+                for(MobileDevelopTools.Slider spec:developTools.sliders(controlSchema,section))addControl(content,spec);
+                addExtraControls(content);
+            } else {
+                addExtraControls(content);
+                for(MobileDevelopTools.Slider spec:developTools.sliders(controlSchema,section))addControl(content,spec);
+            }
+            if ("light".equals(section)) panelButton(content,R.string.reset,this::askReset);
+            else if (!"hdr".equals(section) && !"profile".equals(section)) {
+                panelButton(content,R.string.mobile_reset_group,()->advanced("reset_section",args("section",section)));
+            }
         }
-        ScrollView scroll = scroll();
-        LinearLayout content = stack(TILE);
-        content.setPadding(dp(16), dp(2), dp(16), dp(12));
-        addExtraControls(content);
-        for (MobileDevelopTools.Slider spec : developTools.sliders(controlSchema, section)) addControl(content, spec);
-        if (MobileDevelopTools.quick(section)) content.addView(button(R.string.reset, false, this::askReset), lp(MATCH, WRAP));
-        else if (!"hdr".equals(section)) {
-            content.addView(button(R.string.mobile_reset_group, false, () -> advanced("reset_section", args("section", section))), lp(MATCH, WRAP));
-        }
-        scroll.addView(content, lp(MATCH, WRAP));
-        editorPanel.addView(scroll, new LinearLayout.LayoutParams(MATCH, 0, 1));
+        settingsView.addView(content,lp(MATCH,WRAP));
+        editorPanel.addView(settingsView,new LinearLayout.LayoutParams(MATCH,0,1));
         syncControls();
     }
 
-    private void chooseTool() {
-        if (!photoUsable || controlSchema.length() == 0) { feedback(getString(R.string.mobile_preview_wait),false); return; }
-        ArrayList<CharSequence> titles = new ArrayList<>();
-        ArrayList<Runnable> actions = new ArrayList<>();
-        for (MobileDevelopTools.Panel p : MobileDevelopTools.PANELS) {
-            titles.add(developTools.tr(p.label()));
-            actions.add(() -> selectToolPanel(p.id()));
-        }
-        addTool(titles, actions, R.string.mobile_looks, () -> { commitAdjustments(); looks.show(selected.id()); });
-        addTool(titles, actions, R.string.mobile_masks, () -> canvasTool("mask"));
-        addTool(titles, actions, R.string.mobile_remove, () -> canvasTool("remove"));
-        addTool(titles, actions, R.string.canvas_eyes, () -> canvasTool("eyes"));
-        addTool(titles, actions, R.string.mobile_free_crop, () -> canvasTool("crop"));
-        addTool(titles, actions, R.string.mobile_organize, () -> libraryTools.organize(selected.id()));
-        addTool(titles, actions, R.string.flow_workflow, () -> showWorkflow(new JSONArray().put(selected.id())));
-        addTool(titles, actions, R.string.mobile_export_options, this::chooseExport);
-        addTool(titles, actions, R.string.info, this::photoInfo);
-        new AlertDialog.Builder(this).setTitle(R.string.mobile_more_tools).setItems(titles.toArray(new CharSequence[0]),
-            (dialog, which) -> actions.get(which).run()).setNegativeButton(android.R.string.cancel,null).show();
+    private void fillReviewPanel() {
+        quickReview=new MobileQuickReview(this,new MobileQuickReview.Callbacks(){
+            public void onRating(long id,int value){applyReviewMarker(id,"cull_rate","rating",value);}
+            public void onFlag(long id,String value){applyReviewMarker(id,"cull_flag","flag",value);}
+            public void onAutoAdvance(boolean enabled){advanceAfterReview=enabled;}
+        });
+        quickReview.setAutoAdvance(advanceAfterReview);
+        updateReviewPanel();
+        editorPanel.addView(quickReview,new LinearLayout.LayoutParams(MATCH,0,1));
+        LinearLayout line=row();
+        Button assisted=button(R.string.ac_tools,false,()->{if(selected!=null)assistedCull.open(new JSONArray().put(selected.id()));});
+        assisted.setMinHeight(dp(48));line.addView(assisted,new LinearLayout.LayoutParams(0,WRAP,1));
+        Button more=button(R.string.ux_more,false,this::reviewActions);
+        more.setMinHeight(dp(48));line.addView(more,new LinearLayout.LayoutParams(0,WRAP,1));
+        editorPanel.addView(line,lp(MATCH,WRAP));
+    }
+
+    private void reviewActions() {
+        if(selected==null)return;
+        long id=selected.id();
+        ArrayList<CharSequence> tiles=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        addTool(tiles,actions,R.string.mobile_organize,()->libraryTools.organize(id));
+        addTool(tiles,actions,R.string.flow_workflow,()->showWorkflow(new JSONArray().put(id)));
+        addTool(tiles,actions,R.string.mobile_export_options,this::chooseExport);
+        addTool(tiles,actions,R.string.info,this::photoInfo);
+        new AlertDialog.Builder(this).setTitle(R.string.ux_more).setItems(tiles.toArray(new CharSequence[0]),(d,i)->actions.get(i).run())
+            .setNegativeButton(android.R.string.cancel,null).show();
     }
 
     private void addTool(ArrayList<CharSequence> titles, ArrayList<Runnable> actions, int name, Runnable action) {
@@ -589,11 +766,6 @@ public class MainActivity extends Activity {
         commitAdjustments();
         section = key;
         fillEditorPanel();
-    }
-
-    private void category(LinearLayout categories, String key, int text) {
-        Button tab = button(text, key.equals(section), () -> selectToolPanel(key));
-        tab.setSelected(key.equals(section)); categories.addView(tab, new LinearLayout.LayoutParams(0, WRAP, 1));
     }
 
     private JSONObject advancedState() {
@@ -762,27 +934,63 @@ public class MainActivity extends Activity {
 
     private void addControl(LinearLayout pane, MobileDevelopTools.Slider spec) {
         LinearLayout header = row();
-        header.addView(label(spec.label(), 15, TEXT, false), new LinearLayout.LayoutParams(0, WRAP, 1));
-        TextView valueLabel = label("", 14, GOLD, false);
-        header.addView(valueLabel, lp(WRAP, WRAP)); pane.addView(header, lp(MATCH, WRAP));
+        header.addView(label(spec.label(),15,TEXT,true),new LinearLayout.LayoutParams(0,WRAP,1));
+        TextView valueLabel=label("",15,GOLD,true);
+        valueLabel.setGravity(Gravity.CENTER);valueLabel.setMinWidth(dp(42));
         SeekBar slider = new SeekBar(this);
+        Button less=glyph("−",R.string.ux_decrease,()->stepSlider(spec,slider,-1));
+        Button plus=glyph("+",R.string.ux_increase,()->stepSlider(spec,slider,1));
+        less.setContentDescription(getString(R.string.ux_less_value,spec.label()));
+        plus.setContentDescription(getString(R.string.ux_more_value,spec.label()));
+        header.addView(less,lp(dp(48),dp(48)));header.addView(valueLabel,lp(WRAP,WRAP));header.addView(plus,lp(dp(48),dp(48)));
+        pane.addView(header,lp(MATCH,WRAP));
         slider.setContentDescription(spec.label());
         slider.setMax(spec.steps());
         int p = spec.position(settings.optDouble(spec.key(), spec.initial()));
         slider.setProgress(p); slider.setMinimumHeight(dp(48)); slider.setEnabled(photoUsable);
         showValue(spec, p, valueLabel, slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onStartTrackingTouch(SeekBar b) {}
-            @Override public void onProgressChanged(SeekBar b, int n, boolean user) {
-                showValue(spec, n, valueLabel, slider);
-                if (!user || !photoUsable) return;
-                pendingEdits.put(spec.key(), spec.value(n));
-                ui.removeCallbacks(adjustDelay); ui.postDelayed(adjustDelay, 320);
+            @Override public void onStartTrackingTouch(SeekBar b) {
+                sliding=true;ui.removeCallbacks(adjustDelay);
             }
-            @Override public void onStopTrackingTouch(SeekBar b) { commitAdjustments(); }
+            @Override public void onProgressChanged(SeekBar b, int n, boolean user) {
+                showValue(spec,n,valueLabel,slider);
+                if(!user||!photoUsable)return;
+                pendingEdits.put(spec.key(),spec.value(n));
+                ++draftRevision;
+                if(sliding) scheduleSliderDraft();
+                else {ui.removeCallbacks(adjustDelay);ui.postDelayed(adjustDelay,180);}
+            }
+            @Override public void onStopTrackingTouch(SeekBar b) { sliding=false;commitAdjustments(); }
         });
         sliders.put(spec.key(), slider); sliderSpecs.put(spec.key(),spec);
         pane.addView(slider, lp(MATCH, dp(48)));
+    }
+
+    private void stepSlider(MobileDevelopTools.Slider spec,SeekBar slider,int direction) {
+        if(!photoUsable||!slider.isEnabled())return;
+        int p=Math.max(0,Math.min(slider.getMax(),slider.getProgress()+direction));
+        if(p==slider.getProgress())return;
+        slider.setProgress(p);pendingEdits.put(spec.key(),spec.value(p));
+        ui.removeCallbacks(adjustDelay);ui.postDelayed(adjustDelay,160);
+    }
+
+    private void scheduleSliderDraft() {
+        if(sliding&&!draftInFlight&&!ui.hasCallbacks(draftPulse))ui.postDelayed(draftPulse,90);
+    }
+
+    private void renderSliderDraft() {
+        if(!sliding||draftInFlight||selected==null||pendingEdits.isEmpty())return;
+        long id=selected.id();
+        int ticket=draftTicket, revision=draftRevision;
+        JSONObject payload=args("id",id,"edge",480,"quality",68,"values",new JSONObject(new HashMap<>(pendingEdits)));
+        draftInFlight=true;
+        work(0,()->decode(engine.request("draft_render",payload)),image->{
+            draftInFlight=false;
+            if(ticket==draftTicket&&sliding&&isEditing(id)&&!comparePinned&&!compareHeld&&preview!=null)
+                preview.setImage(image,false);
+            if(revision!=draftRevision||ticket!=draftTicket) scheduleSliderDraft();
+        },error->{draftInFlight=false;if(revision!=draftRevision||ticket!=draftTicket)scheduleSliderDraft();});
     }
 
     private void showValue(MobileDevelopTools.Slider spec, int n, TextView v, SeekBar slider) {
@@ -870,7 +1078,10 @@ public class MainActivity extends Activity {
             if (!catalogueId.equals(active)) { resetCatalogue(active); showScreen(); }
             ready = true; clearStatus(); slideshow.ready();
             if (response.optBoolean("fallback")) feedback(getString(R.string.migration_fallback),true);
-            if ("editor".equals(screen)) openPhoto(); else if ("library".equals(screen)) loadLibrary(true);
+            if ("editor".equals(screen)) {
+                openPhoto();
+                if(editorRestorePosition>=0)loadEditorWindow(Math.max(0,editorRestorePosition-40),-1);
+            } else if ("library".equals(screen)) loadLibrary(true);
             // This clears app-owned cache only; an in-flight save surviving Activity recreation is kept.
             String keep = pendingExport;
             work(10, () -> {
@@ -890,13 +1101,119 @@ public class MainActivity extends Activity {
         });
     }
 
+    private int editorLocalIndex(long id) {
+        for(int i=0;i<editorWindow.size();i++)if(editorWindow.get(i).id()==id)return i;
+        return -1;
+    }
+
+    private void setEditorWindowFromGrid() {
+        editorWindow.clear();editorWindow.addAll(photos);
+        editorRows.clear();editorRows.putAll(libraryRows);
+        editorWindowStart=0;editorTotal=libraryTotal;
+        editorRestorePosition=-1;
+    }
+
+    private void loadEditorWindow(int start,int target) {
+        if (navigationBusy || selected==null || !"editor".equals(screen))return;
+        long from=selected.id(), epoch=CATALOGUE_EPOCH.get();
+        int ticket=++navigationTicket;
+        navigationBusy=true;refreshFilmstrip();updateReviewPanel();
+        JSONObject filter=libraryTools.decorate(args("start",start,"query",query));
+        work(0,()->req("list",filter),reply->{
+            if(ticket!=navigationTicket||epoch!=CATALOGUE_EPOCH.get()||!isEditing(from))return;
+            navigationBusy=false;
+            ArrayList<Photo> page=new ArrayList<>();
+            JSONArray returned=reply.optJSONArray("items");
+            if(returned!=null)for(int i=0;i<returned.length();i++) {
+                JSONObject row=returned.optJSONObject(i);if(row!=null){Photo candidate=Photo.read(row);page.add(candidate);editorRows.put(candidate.id(),row);}
+            }
+            int found=-1;
+            for(int i=0;i<page.size();i++)if(page.get(i).id()==from){found=i;break;}
+            if(found>=0) {
+                editorWindow.clear();editorWindow.addAll(page);editorWindowStart=start;editorTotal=reply.optInt("total");
+                if(target>=0){
+                    // Carry position only when the current item still belongs to this result page.
+                    int i=target-start;
+                    if(i>=0 && i<page.size() && page.get(i).id()!=from){openEditorNeighbor(page.get(i).id());return;}
+                }
+            } else if(target<0 && start>0) {
+                loadEditorWindow(0,-1);return;
+            }
+            refreshFilmstrip();updateReviewPanel();
+        },failure->{
+            if(ticket!=navigationTicket||!isEditing(from))return;
+            navigationBusy=false;refreshFilmstrip();updateReviewPanel();problem(failure);
+        });
+    }
+
+    private void stepEditor(int step) {
+        if (selected==null || navigationBusy || reviewBusy || Math.abs(step)!=1 || !"editor".equals(screen))return;
+        int current=editorLocalIndex(selected.id());
+        int next=current+step, global=editorWindowStart+next;
+        if(current<0||global<0||global>=editorTotal)return;
+        if(next>=0&&next<editorWindow.size()) {openEditorNeighbor(editorWindow.get(next).id());return;}
+        loadEditorWindow(Math.max(0,global-40),global);
+    }
+
+    private void openEditorNeighbor(long id) {
+        if(navigationBusy||reviewBusy||editorLocalIndex(id)<0||! "editor".equals(screen))return;
+        if(selected!=null&&selected.id()!=id)showEditorPhoto(editorWindow.get(editorLocalIndex(id)),true);
+    }
+
+    private void openCataloguePhoto(Photo photo) {
+        if ("library".equals(screen)) setEditorWindowFromGrid();
+        showEditorPhoto(photo,false);
+    }
+
+    private void showEditorPhoto(Photo photo,boolean carryTool) {
+        commitAdjustments();
+        ++previewTicket;++beforeTicket;++navigationTicket;
+        selected=photo;beforePreview=null;photoUsable=false;
+        synchronized(THUMBNAILS){currentPreview=THUMBNAILS.get(photo.id());}
+        beforeLoading=false;compareHeld=false;comparePinned=false;navigationBusy=false;
+        settings=new JSONObject();controlSchema=new JSONArray();screen="editor";
+        if(!carryTool){editorFamily="light";section="light";panelOpen=false;}
+        showScreen();
+        if(ready)openPhoto();
+    }
+
+    private void updateReviewPanel() {
+        if(quickReview==null||selected==null)return;
+        JSONObject row=editorRows.get(selected.id());
+        if(row==null)row=libraryRows.get(selected.id());
+        int i=editorLocalIndex(selected.id());
+        quickReview.setState(selected.id(),row==null?0:row.optInt("rating"),row==null?"none":row.optString("flag","none"),
+            i>=0&&editorWindowStart+i+1<editorTotal);
+        quickReview.setBusy(reviewBusy||navigationBusy||!photoUsable);
+    }
+
+    private void applyReviewMarker(long id,String op,String key,Object value) {
+        if(!isEditing(id)||reviewBusy||navigationBusy||!photoUsable)return;
+        final boolean advance=quickReview!=null&&quickReview.shouldAdvanceAfterSuccess(id);
+        long epoch=CATALOGUE_EPOCH.get();
+        reviewBusy=true;updateReviewPanel();
+        work(0,()->req(op,args("ids",new JSONArray().put(id),key,value)),reply->{
+            if(epoch!=CATALOGUE_EPOCH.get())return;
+            reviewBusy=false;
+            JSONObject row=editorRows.get(id);
+            if(row==null){row=new JSONObject();editorRows.put(id,row);}
+            try {row.put(key,value);} catch(JSONException ignored){}
+            if(!isEditing(id))return;
+            updateReviewPanel();
+            if(advance&&advanceAfterReview&&panelOpen&&"review".equals(editorFamily))stepEditor(1);
+        },failure->{if(epoch==CATALOGUE_EPOCH.get()){reviewBusy=false;if(isEditing(id)){updateReviewPanel();problem(failure);}}});
+    }
+
     private void resetCatalogue(String active) {
+        if(assistedCull!=null)assistedCull.close();
         catalogueId=active;
         CATALOGUE_EPOCH.incrementAndGet();
         synchronized(THUMBNAILS){THUMBNAILS.evictAll();}
         ui.removeCallbacks(searchDelay);
         ui.removeCallbacks(adjustDelay);
         thumbRequests.clear();failedThumbs.clear();libraryRows.clear();photos.clear();
+        editorWindow.clear();editorRows.clear();editorWindowStart=0;editorTotal=0;libraryTotal=0;
+        ++navigationTicket;navigationBusy=false;reviewBusy=false;
         ++listTicket;++previewTicket;++beforeTicket;
         listLoading=false;photoUsable=false;beforeLoading=false;comparePinned=false;compareHeld=false;
         screen="library";returnFromSettings="library";query="";memoryGridRow=0;
@@ -922,7 +1239,10 @@ public class MainActivity extends Activity {
             }
             adapter.notifyDataSetChanged();
             if (reset && memoryGridRow > 0 && memoryGridRow < photos.size()) grid.setSelection(memoryGridRow);
-            more.setVisibility(photos.size() < reply.optInt("total") ? View.VISIBLE : View.GONE);
+            libraryTotal=reply.optInt("total");
+            if(libraryCountLabel!=null) libraryCountLabel.setText(getString(R.string.ux_count,libraryTotal));
+            if(libraryReview!=null)libraryReview.setEnabled(!photos.isEmpty());
+            more.setVisibility(photos.size() < libraryTotal ? View.VISIBLE : View.GONE);
             boolean filtered = libraryTools.isFiltered();
             empty.setText(filtered ? R.string.ct_filter_empty : wanted.trim().isEmpty() ? R.string.empty_title : R.string.no_results);
             root.findViewWithTag("empty_body").setVisibility(!filtered && wanted.trim().isEmpty() ? View.VISIBLE : View.GONE);
@@ -945,13 +1265,14 @@ public class MainActivity extends Activity {
         ArrayList<CharSequence> labels=new ArrayList<>();
         ArrayList<Runnable> actions=new ArrayList<>();
         addTool(labels,actions,R.string.flow_workflows,()->culling.open(ids));
+        addTool(labels,actions,R.string.ac_tools,()->assistedCull.open(ids));
         addTool(labels,actions,R.string.flow_batch,()->chooseBatch(ids));
         if(ids.length()>1)addTool(labels,actions,R.string.bs_tools,()->batchSync.open(ids));
         addTool(labels,actions,R.string.flow_print,()->print.show(selectedIds));
         if(ids.length()>1)addTool(labels,actions,R.string.merge_title,()->merge.show(ids));
         addTool(labels,actions,R.string.slide_workspace,()->slideshow.show(ids));
         new AlertDialog.Builder(this).setTitle(R.string.flow_workflow)
-            .setItems(labels.toArray(CharSequence[]::new),(d,n)->actions.get(n).run())
+            .setItems(labels.toArray(new CharSequence[0]),(d,n)->actions.get(n).run())
             .setNegativeButton(android.R.string.cancel,null).show();
     }
 
@@ -1058,10 +1379,13 @@ public class MainActivity extends Activity {
         work(0, () -> {
             JSONObject v = req("metadata",args("id",id));
             v.put("schema",req("controls",args("id",id)).getJSONArray("controls"));
+            JSONArray cull=req("cull_info",args("ids",new JSONArray().put(id))).optJSONArray("photos");
+            if(cull!=null&&cull.length()>0)v.put("review",cull.getJSONObject(0));
             return v;
         }, v -> {
             if (!isEditing(id)) return;
             settings = v; controlSchema = v.optJSONArray("schema");
+            JSONObject scored=v.optJSONObject("review");if(scored!=null)editorRows.put(id,scored);
             fillEditorPanel(); refreshPreview(id, true);
         }, error -> { if (isEditing(id)) problem(error); });
     }
@@ -1073,7 +1397,7 @@ public class MainActivity extends Activity {
             photoUsable = true; currentPreview=image;
             if (first || (!compareHeld && !comparePinned)) preview.setImage(image, first);
             else displayComparison();
-            export.setEnabled(!exporting); syncControls();
+            export.setEnabled(!exporting); syncControls();updateReviewPanel();
             if (first && !exporting) clearStatus();
         }, error -> {
             if (!isEditing(id) || ticket != previewTicket) return;
@@ -1096,7 +1420,8 @@ public class MainActivity extends Activity {
     }
 
     private void commitAdjustments() {
-        ui.removeCallbacks(adjustDelay);
+        ui.removeCallbacks(adjustDelay);ui.removeCallbacks(draftPulse);
+        sliding=false;++draftTicket;
         if (selected == null || pendingEdits.isEmpty()) return;
         long id = selected.id();
         Map<String,Double> edits = new HashMap<>(pendingEdits);

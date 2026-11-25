@@ -91,7 +91,7 @@ final class MobileDesktopMigration {
             names.add((active.equals(lib.optString("id")) ? "✓  " : "") + clean(lib.optString("name"), 96));
         }
         new AlertDialog.Builder(activity).setTitle(R.string.migration_title)
-            .setItems(names.toArray(String[]::new), (d, n) -> {
+            .setItems(names.toArray(new String[0]), (d, n) -> {
                 String id = ids.get(n);
                 if (id.isEmpty()) explain();
                 else if (!id.equals(active) || (fallback && id.equals("default"))) switchTo(id);
@@ -155,7 +155,7 @@ final class MobileDesktopMigration {
                 String docId = DocumentsContract.getTreeDocumentId(tree);
                 Item root = readDocument(tree, docId, job.signal);
                 if (!root.directory()) throw failure("migration_incomplete");
-                String name = clean(title.isBlank() ? root.name() : title, 96);
+                String name = clean(title.trim().isEmpty() ? root.name() : title, 96);
                 if (name.isEmpty()) name = activity.getString(R.string.migration_untitled);
                 new Staging(tree, stage, job.signal).all(root);
                 job.commit();

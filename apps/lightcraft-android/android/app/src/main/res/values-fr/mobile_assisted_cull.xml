@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ac_tools">Tri assisté</string>
+    <string name="ac_limit">Sélectionne au maximum %d photos pour une analyse.</string>
+    <string name="ac_invalid_selection">Les photos sélectionnées ne sont plus disponibles.</string>
+    <string name="ac_analyze">Analyser la netteté et les rafales</string>
+    <string name="ac_similar_selection">Chercher dans la sélection</string>
+    <string name="ac_similar_recent">Chercher dans les imports récents</string>
+    <string name="ac_source">Choisir une photo de référence</string>
+    <string name="ac_need_photos">Importe une autre photo pour pouvoir comparer.</string>
+    <string name="ac_reference">Référence : %s</string>
+    <string name="ac_recent_help">La recherche couvre la référence et jusqu’à 39 des dernières photos importées. Les filtres actuels ne changent pas.</string>
+    <string name="ac_similarity_help">La ressemblance compare la composition et les tons des miniatures, pas l’identité du sujet ni la reconnaissance faciale. Aucun marqueur n’est appliqué.</string>
+    <string name="ac_analysis_help">Les rafales regroupent des prises successives visuellement proches. Les seuils de netteté et d’écrêtage indiquent les photos à vérifier.</string>
+    <string name="ac_threshold_sim">Ressemblance visuelle minimale (0–100)</string>
+    <string name="ac_threshold_burst_sim">Ressemblance minimale dans une rafale (0–100)</string>
+    <string name="ac_threshold_gap">Écart maximal entre deux prises successives (0–120 secondes)</string>
+    <string name="ac_threshold_sharp">Vérifier la netteté sous le seuil (0–100)</string>
+    <string name="ac_threshold_clip">Vérifier l’écrêtage à partir de (0–100 %)</string>
+    <string name="ac_find">Chercher des photos similaires</string>
+    <string name="ac_start">Lancer</string>
+    <string name="ac_failed">L’analyse n’a pas abouti. Vérifie que les photos s’ouvrent.</string>
+    <string name="ac_busy">Une analyse est déjà en cours.</string>
+    <string name="ac_preparing">Préparation de l’analyse des aperçus…</string>
+    <string name="ac_progress">Sources examinées : %1$d/%2$d</string>
+    <string name="ac_similar_summary">Seuil de ressemblance : %1$d %% · Portée : %2$d photos</string>
+    <string name="ac_analysis_summary">Rafale : %1$d s · Ressemblance : %2$d %% · Netteté à vérifier sous %3$d · Écrêtage à partir de %4$d %%</string>
+    <string name="ac_estimate">La netteté est estimée à partir des détails des miniatures. Un arrière-plan net peut bien ressortir même si l’athlète est flou, et l’écrêtage peut être volontaire. Compare ou ouvre les photos avant de trancher.</string>
+    <string name="ac_no_results">Aucune autre photo n’atteint ce seuil de ressemblance.</string>
+    <string name="ac_close">Fermer</string>
+    <string name="ac_open">Ouvrir dans l’éditeur</string>
+    <string name="ac_picked">Retenue</string>
+    <string name="ac_rejected">Rejetée</string>
+    <string name="ac_score_sim">Ressemblance : %1$s %%</string>
+    <string name="ac_score_focus">Netteté estimée : %1$s/100 · Écrêtage : %2$s %%</string>
+    <string name="ac_burst_best">Rafale %d : meilleure estimation de netteté</string>
+    <string name="ac_burst">Rafale %d</string>
+    <string name="ac_below">Netteté à vérifier</string>
+    <string name="ac_clipping">Écrêtage à vérifier</string>
+    <string name="ac_compare">Comparer les photos</string>
+    <string name="ac_annotate">Définir un marqueur…</string>
+    <string name="ac_pick">Marquer comme retenue</string>
+    <string name="ac_reject">Marquer comme rejetée</string>
+    <string name="ac_clear">Retirer le marqueur</string>
+    <string name="ac_confirm_mark">Confirmer le marqueur</string>
+    <string name="ac_mark_body">%1$s : %2$s. Seule cette photo est concernée. Aucun fichier n’est supprimé.</string>
+    <string name="ac_apply">Appliquer</string>
+    <string name="ac_flag_saved">Marqueur enregistré.</string>
+    <string name="ac_flag_failed">Impossible de modifier le marqueur. Rouvre l’examen pour afficher son état actuel.</string>
+    <string name="ac_range">Saisis une valeur de %1$d à %2$d.</string>
+    <plurals name="ac_scope_count">
+        <item quantity="one">%d photo dans cette sélection</item>
+        <item quantity="other">%d photos dans cette sélection</item>
+    </plurals>
+    <plurals name="ac_unreadable">
+        <item quantity="one">%d photo n’a pas pu être analysée.</item>
+        <item quantity="other">%d photos n’ont pas pu être analysées.</item>
+    </plurals>
+</resources>

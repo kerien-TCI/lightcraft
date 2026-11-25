@@ -18,6 +18,7 @@ thread_local! {
     static LAB: RefCell<Option<Lab>> = const { RefCell::new(None) };
 }
 
+mod assisted_cull;
 mod batch_export;
 mod batch_sync;
 mod canvas_tools;
@@ -127,6 +128,27 @@ impl Lab {
             .map_err(|error| if error.contains("High Efficiency") || error.contains("HE★") { "nef_he" } else { "unsupported" })
     }
 
+    /// A coalesced drag previews real engine settings without changing the catalogue or cache.
+    fn render_slider_draft(&mut self, id: PhotoId, p: &Value) -> Reply<Vec<u8>> {
+        let supplied = p["values"].as_object().filter(|o| (1..=8).contains(&o.len())).ok_or("edit")?;
+        let edge = p["edge"].as_u64().unwrap_or(480).clamp(256, 640) as usize;
+        let mut job = self.session.render_job(id, edge, edge, false, true).ok_or("selection")?.draft();
+        let mut settings = (*job.settings).clone();
+        for (key, value) in supplied {
+            let value = value.as_f64().filter(|v| v.is_finite()).ok_or("edit")?;
+            if !develop_tools::slider_allowed(key, &settings) || !controls::set(&mut settings, key, value) {
+                return Err("edit");
+            }
+        }
+        job.settings = std::sync::Arc::new(settings);
+        // Ephemeral settings must never read or write a cache key for the committed edit.
+        job.cache = None;
+        job.view_cache = None;
+        job.stages = None;
+        let rendered = job.run().rendered.map_err(|_| "unsupported")?;
+        encode_rendered(&rendered, &Self::photo_options(p), None).map_err(|_| "unsupported")
+    }
+
     fn render_before(&mut self, id: PhotoId, p: &Value) -> Reply<Vec<u8>> {
         let edge = p["edge"].as_u64().unwrap_or(960).clamp(128, 1440) as usize;
         let result = self.session.render_job(id, edge, edge, true, true).ok_or("selection")?.run();
@@ -183,6 +205,7 @@ impl Lab {
             o if o.starts_with("migration.") => self.migration_action(o, p),
             o if o.starts_with("smart_") => self.mobile_smart_album(o, p).map(bytes_json),
             o if o.starts_with("sync_") => self.mobile_sync(o, p).map(bytes_json),
+            o if o.starts_with("study_") => self.mobile_study(o, p).map(bytes_json),
             o if o.starts_with("looks.") => self.looks_action(o, p),
             o if o.starts_with("library_") => self.mobile_library(o, p).map(bytes_json),
             o if o.starts_with("noise_") => self.mobile_denoise(o, p).map(bytes_json),
@@ -200,6 +223,7 @@ impl Lab {
             }
             "render" => self.valid_photo(p).and_then(|id| self.render(id, p)),
             "before" => self.valid_photo(p).and_then(|id| self.render_before(id, p)),
+            "draft_render" => self.valid_photo(p).and_then(|id| self.render_slider_draft(id, p)),
             "export" => {
                 let id = self.valid_photo(p)?;
                 let file = p["file"]
@@ -325,6 +349,13 @@ mod tests {
         assert_eq!(row["total"], 1);
         assert_eq!(lab.mobile_library_page(&json!({"query":"none"}))["total"], 0);
         let before = lab.action("render", &json!({"id":id,"edge":320})).unwrap();
+        let plain_draft = lab.action("draft_render", &json!({"id":id,"edge":360,"values":{"light.exposure":0.0}})).unwrap();
+        let first_draft = lab.action("draft_render", &json!({"id":id,"edge":360,"values":{"light.exposure":0.8}})).unwrap();
+        assert!(first_draft.starts_with(&[0xff, 0xd8]));
+        assert_ne!(plain_draft, first_draft);
+        assert_eq!(lab.settings(PhotoId(id)).unwrap()["light.exposure"], 0.0);
+        assert_eq!(std::fs::read(&local).unwrap(), png);
+        assert_eq!(lab.action("draft_render", &json!({"id":id,"values":{"unknown":1}})), Err("edit"));
         let edits = json!({"id":id,"values":{"light.exposure":1.5,"color.saturation":10}});
         lab.action("adjust_many", &edits).unwrap();
         assert_eq!(lab.settings(PhotoId(id)).unwrap()["light.exposure"], 1.5);

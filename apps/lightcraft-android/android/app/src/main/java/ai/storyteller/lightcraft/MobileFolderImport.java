@@ -96,7 +96,7 @@ final class MobileFolderImport {
             options.add(activity.getString(R.string.folder_forget));
         }
         new AlertDialog.Builder(activity).setTitle(R.string.folder_import_title)
-            .setItems(options.toArray(CharSequence[]::new), (dialog, index) -> {
+            .setItems(options.toArray(new CharSequence[0]), (dialog, index) -> {
                 if (index == 0) choose();
                 else if (index == 1) scan(saved, true, 0);
                 else forget(saved);
@@ -522,7 +522,7 @@ final class MobileFolderImport {
 
     private void addLabel(LinearLayout page, int res, Object... args) {
         TextView label = new TextView(activity);
-        label.setText(activity.getString(res, args));
+        label.setText(args.length == 0 ? activity.getString(res) : activity.getString(res, args));
         label.setPadding(0, dp(8), 0, dp(4));
         page.addView(label);
     }

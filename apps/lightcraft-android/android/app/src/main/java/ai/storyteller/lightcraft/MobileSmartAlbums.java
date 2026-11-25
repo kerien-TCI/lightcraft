@@ -182,7 +182,7 @@ final class MobileSmartAlbums {
             });
         });
         new AlertDialog.Builder(activity).setTitle(R.string.smart_field)
-            .setItems(labels.toArray(CharSequence[]::new),(d,i)->actions.get(i).run())
+            .setItems(labels.toArray(new CharSequence[0]),(d,i)->actions.get(i).run())
             .setNegativeButton(android.R.string.cancel,null).show();
     }
     private void chooseValue(JSONObject field,JSONArray albums,JSONObject existing,Consumer<JSONObject> done) {
