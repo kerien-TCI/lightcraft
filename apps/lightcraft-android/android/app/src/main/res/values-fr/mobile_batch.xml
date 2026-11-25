@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="batch_export">Export par lot</string>
+    <string name="batch_export_count">Exporter %1$d photos sélectionnées</string>
+    <string name="batch_count_limit">Sélectionne entre 1 et %1$d photos.</string>
+    <string name="batch_mode_render">Photos retouchées…</string>
+    <string name="batch_mode_original">Originaux + fichiers XMP…</string>
+    <string name="batch_original_privacy">Chaque original est copié à l’identique avec son fichier XMP qui contient les retouches. Les photos qui contiennent des données de localisation sont ignorées. Choisis un dossier accessible en écriture ou crée un sous-dossier dans Fichiers.</string>
+    <string name="batch_choose_folder">Choisir un dossier</string>
+    <string name="batch_progress">Export de %1$d sur %2$d…</string>
+    <string name="batch_summary">%1$d photos exportées sur %2$d.</string>
+    <string name="batch_err_location">L’original contient des données de localisation ou n’a pas pu être vérifié. Exporte plutôt la photo retouchée.</string>
+    <string name="batch_err_partial">Le fournisseur n’a pas pu supprimer un fichier incomplet. Vérifie les nouveaux fichiers du dossier sélectionné.</string>
+    <string name="batch_err_destination">Impossible de créer de nouveaux fichiers dans ce dossier. Choisis un autre dossier dans Fichiers.</string>
+    <string name="batch_err_original">Impossible de lire le fichier original de cette photo.</string>
+    <string name="batch_err_nef">Ce RAW Nikon Haute efficacité ne peut pas être rendu. Essaie « Original + XMP ».</string>
+    <string name="batch_err_file">Impossible d’exporter cette photo.</string>
+</resources>

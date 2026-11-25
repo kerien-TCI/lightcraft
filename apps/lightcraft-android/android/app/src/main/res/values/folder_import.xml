@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="folder_import_title">Import from a folder</string>
+    <string name="folder_choose">Choose a folder or SD card</string>
+    <string name="folder_rescan">Scan again: %1$s</string>
+    <string name="folder_forget">Forget this folder</string>
+    <string name="folder_forget_info">Stop remembering read-only access to %1$s? This does not delete your photos or change the folder.</string>
+    <string name="folder_default_name">Selected folder</string>
+    <string name="folder_scanning">Scanning the folder…</string>
+    <string name="folder_scan_error">Cannot read this folder. Reconnect its storage or choose an accessible subfolder such as DCIM.</string>
+    <string name="folder_no_photos">No supported photos were found within the scan limits. On an SD card, try selecting its DCIM or camera subfolder.</string>
+    <string name="folder_found">Photos found: %1$d
+Other files skipped: %2$d · unreadable folders: %3$d</string>
+    <string name="folder_limit">This scan reached a safety limit; a narrower folder may reveal more photos.</string>
+    <string name="folder_copy_only">The app copies photos and reads any associated XMP settings. Source documents are never changed. Duplicate photos are skipped by content.</string>
+    <string name="folder_batch_help">Import up to %1$d photos per batch. For a later batch, enter the next photo number in this sorted scan or pick a smaller folder.</string>
+    <string name="folder_first">First photo number (1 = beginning)</string>
+    <string name="folder_naming">File naming template</string>
+    <string name="folder_template_hint">Blank keeps the original file names</string>
+    <string name="folder_template_examples">Example: {date:%Y%m%d}-{seq:4}. Other tokens include {name} and {folder}; the extension is kept.</string>
+    <string name="folder_sequence">Starting sequence number</string>
+    <string name="folder_arrange">Organize copies</string>
+    <string name="folder_arrange_day">Folders by capture day</string>
+    <string name="folder_arrange_month">Folders by capture month</string>
+    <string name="folder_arrange_flat">Put copies in one folder</string>
+    <string name="folder_remember">Remember this folder for manual rescans only</string>
+    <string name="folder_confirm">Copy and import</string>
+    <string name="folder_numeric_error">Enter a number within the allowed range.</string>
+    <string name="folder_template_error">Use a filename template with recognized tokens and no path separators.</string>
+    <string name="folder_copying">Copying files…</string>
+    <string name="folder_saving">Adding copies to the library…</string>
+    <string name="folder_report">Photos added: %1$d
+Duplicates skipped: %2$d
+Photos rejected by the engine: %3$d
+Unreadable source files: %4$d
+Size limit skipped: %5$d
+XMP files not copied: %6$d
+Engine warnings: %7$d</string>
+    <string name="folder_resume">Next photo for this scan: %1$d. If files on the card change, check the starting number before continuing.</string>
+    <string name="folder_not_remembered">Android or this provider did not grant lasting access. You can choose this folder again later.</string>
+    <string name="folder_import_error">Import could not finish. Check the library and storage space before retrying. The source folder was not modified.</string>
+</resources>

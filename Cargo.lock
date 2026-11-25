@@ -3960,7 +3960,9 @@ dependencies = [
  "lightcraft-codecs",
  "lightcraft-develop",
  "lightcraft-engine",
+ "lightcraft-merge",
  "lightcraft-raster",
+ "rayon",
  "serde_json",
  "tempfile",
 ]

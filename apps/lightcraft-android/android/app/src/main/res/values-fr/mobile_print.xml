@@ -1,0 +1,41 @@
+<resources>
+    <string name="mobile_print_title">Impression PDF</string>
+    <string name="mobile_print_toolbar">PDF</string>
+    <string name="mobile_print_layout">Mise en page</string>
+    <string name="mobile_print_single">Une photo par page</string>
+    <string name="mobile_print_contact">Planche-contact</string>
+    <string name="mobile_print_paper">Format du papier</string>
+    <string name="mobile_print_orientation">Orientation</string>
+    <string name="mobile_print_portrait">Portrait</string>
+    <string name="mobile_print_landscape">Paysage</string>
+    <string name="mobile_print_resolution">Résolution d’impression</string>
+    <string name="mobile_print_margin">Marges</string>
+    <string name="mobile_print_gap">Espacement des photos</string>
+    <string name="mobile_print_columns">Colonnes</string>
+    <string name="mobile_print_rows">Lignes</string>
+    <string name="mobile_print_square">Cellules carrées</string>
+    <string name="mobile_print_fill">Remplir les cellules (recadrer)</string>
+    <string name="mobile_print_rotate">Tourner les photos pour les ajuster</string>
+    <string name="mobile_print_numbers">Afficher la numérotation</string>
+    <string name="mobile_print_marks">Afficher les repères de coupe</string>
+    <string name="mobile_print_ppi">%1$d ppp</string>
+    <string name="mobile_print_mm">%1$d mm</string>
+    <string name="mobile_print_page_index">Page %1$d sur %2$d</string>
+    <string name="mobile_print_page_image">Aperçu de la page du PDF</string>
+    <string name="mobile_print_previous">Précédente</string>
+    <string name="mobile_print_next">Suivante</string>
+    <string name="mobile_print_preview">Aperçu du PDF</string>
+    <string name="mobile_print_preparing">Création du PDF d’impression…</string>
+    <string name="mobile_print_save">Enregistrer le PDF</string>
+    <string name="mobile_print_filename">Photo Lab impression.pdf</string>
+    <string name="mobile_print_saved">PDF enregistré. Rien n’a été envoyé à une imprimante.</string>
+    <string name="mobile_print_cancelled">Enregistrement annulé. Les originaux sont intacts.</string>
+    <string name="mobile_print_failed">Impossible de créer ou d’enregistrer le PDF. Aucun original n’a été écrasé.</string>
+    <string name="mobile_print_bad_layout">La mise en page ne tient pas sur ce papier. Réduis les marges et l’espacement ou choisis un format plus grand.</string>
+    <string name="mobile_print_memory_limit">Cette mise en page est trop volumineuse sur mobile. Réduis la résolution, choisis moins de photos ou utilise un papier plus petit.</string>
+    <string name="mobile_print_select_limit">Sélectionne entre 1 et 80 photos à imprimer.</string>
+    <plurals name="mobile_print_photo_count">
+        <item quantity="one">%1$d photo sélectionnée · PDF uniquement</item>
+        <item quantity="other">%1$d photos sélectionnées · PDF uniquement</item>
+    </plurals>
+</resources>

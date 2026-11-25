@@ -58,32 +58,27 @@ impl Lab {
                     || photo.meta.keywords.iter().any(|word| word.to_lowercase().contains(&query)))
         };
         let entry = |photo: &Photo| {
-            json!({
+            let mut row = json!({
                 "id":photo.id.0,"name":photo.file_name,"width":photo.width,"height":photo.height,"format":photo.format,
                 "rating":photo.rating,"flag":photo.flag,"label":photo.label,
                 "favorite": quick.is_some_and(|a| catalogue.album_contains(a, photo))
-            })
+            });
+            self.mobile_culling_row(photo, &mut row);
+            row
         };
         let order = p["sort"].as_str().unwrap_or_default();
-        if matches!(order, "name" | "rating" | "capture" | "recent") {
-            let mut all = catalogue.photos().filter(|photo| matches(photo)).collect::<Vec<_>>();
-            match order {
-                "name" => all.sort_by_cached_key(|p| (p.file_name.to_lowercase(), p.id)),
-                "rating" => all.sort_by_key(|p| (std::cmp::Reverse(p.rating), p.id)),
-                "capture" => all.sort_by(|a, b| b.captured.cmp(&a.captured).then(a.id.cmp(&b.id))),
-                _ => all.sort_by(|a, b| b.imported.cmp(&a.imported).then(b.id.cmp(&a.id))),
-            }
-            return json!({"total":all.len(), "items":all.into_iter().skip(start).take(PAGE).map(|p|entry(p)).collect::<Vec<_>>()});
+        let mut all = catalogue.photos().filter(|photo| matches(photo)).collect::<Vec<_>>();
+        match order {
+            "name" => all.sort_by_cached_key(|p| (p.file_name.to_lowercase(), p.id)),
+            "rating" => all.sort_by_key(|p| (std::cmp::Reverse(p.rating), p.id)),
+            "capture" => all.sort_by(|a, b| b.captured.cmp(&a.captured).then(a.id.cmp(&b.id))),
+            "recent" => all.sort_by(|a, b| b.imported.cmp(&a.imported).then(b.id.cmp(&a.id))),
+            _ => {}
         }
-        let mut items = Vec::new();
-        let mut total = 0;
-        for photo in catalogue.photos().filter(|photo| matches(photo)) {
-            if total >= start && items.len() < PAGE {
-                items.push(entry(photo));
-            }
-            total += 1;
-        }
-        json!({"total":total,"items":items})
+        let ids = all.into_iter().map(|p| p.id).collect::<Vec<_>>();
+        let arranged = self.mobile_arrange_culling(&ids);
+        json!({"total":arranged.len(),"items":arranged.into_iter().skip(start).take(PAGE)
+            .filter_map(|id|catalogue.photo(id).map(|p|entry(p))).collect::<Vec<_>>()})
     }
 
     fn mobile_targets(&self, p: &Value) -> Reply<Vec<PhotoId>> {

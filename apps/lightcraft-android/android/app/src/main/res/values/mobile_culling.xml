@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cull_tools">Culling tools</string>
+    <string name="cull_virtual">Create virtual copy</string>
+    <string name="cull_copy_badge">Copy</string>
+    <string name="cull_stack_badge">Stack ×%d</string>
+    <string name="cull_compare">Compare</string>
+    <string name="cull_survey">Survey selection</string>
+    <string name="cull_group">Group into a stack</string>
+    <string name="cull_expand">Expand selected stacks</string>
+    <string name="cull_collapse">Collapse selected stacks</string>
+    <string name="cull_top">Set as top of stack</string>
+    <string name="cull_up">Move up in stack</string>
+    <string name="cull_down">Move down in stack</string>
+    <string name="cull_split">Split stack here</string>
+    <string name="cull_remove">Remove from stack</string>
+    <string name="cull_ungroup">Ungroup stacks</string>
+    <string name="cull_expand_all">Expand all stacks</string>
+    <string name="cull_collapse_all">Collapse all stacks</string>
+    <string name="cull_optional_name">Optional copy name</string>
+    <string name="cull_copy_help">The copy has independent edits but shares the same original file.</string>
+    <string name="cull_create">Create</string>
+    <string name="cull_choose_top">Choose the stack cover</string>
+    <string name="cull_group_help">The chosen photo will be the cover. Any stacks already containing these photos are merged. No file is moved.</string>
+    <string name="cull_apply">Apply</string>
+    <string name="cull_saved">Catalogue updated.</string>
+    <string name="cull_close">Close</string>
+    <string name="cull_reference">Reference</string>
+    <string name="cull_candidate">Candidate</string>
+    <string name="cull_swap">Swap</string>
+    <string name="cull_previous">Previous</string>
+    <string name="cull_next">Next</string>
+    <string name="cull_zoom_reset">Reset zoom</string>
+    <string name="cull_no_preview">Preview unavailable</string>
+    <string name="cull_zoom_hint">%s. Pinch to zoom both previews; double-tap to reset.</string>
+    <string name="cull_pick">Mark as picked</string>
+    <string name="cull_reject">Mark as rejected</string>
+    <string name="cull_unflag">Clear flag</string>
+    <string name="cull_rate">Rate</string>
+    <string name="cull_unrated">No stars</string>
+    <string name="cull_exclude">Hide from this view</string>
+    <string name="cull_picked_badge">Picked</string>
+    <string name="cull_rejected_badge">Rejected</string>
+    <plurals name="cull_photo_count">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="cull_stars">
+        <item quantity="one">%d star</item>
+        <item quantity="other">%d stars</item>
+    </plurals>
+</resources>

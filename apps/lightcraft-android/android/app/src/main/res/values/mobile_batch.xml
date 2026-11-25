@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="batch_export">Batch export</string>
+    <string name="batch_export_count">Export %1$d selected photos</string>
+    <string name="batch_count_limit">Select between 1 and %1$d photos.</string>
+    <string name="batch_mode_render">Rendered photos…</string>
+    <string name="batch_mode_original">Originals + XMP sidecars…</string>
+    <string name="batch_original_privacy">Each original is copied unchanged with its own XMP file containing the edits. Photos that contain embedded location data are skipped. Choose a writable folder; create a subfolder in Files if required.</string>
+    <string name="batch_choose_folder">Choose folder</string>
+    <string name="batch_progress">Exporting %1$d of %2$d…</string>
+    <string name="batch_summary">%1$d of %2$d photos exported.</string>
+    <string name="batch_err_location">The original contains location data or could not be checked. Use rendered export instead.</string>
+    <string name="batch_err_partial">The provider could not remove an incomplete result. Check the new files in the selected folder.</string>
+    <string name="batch_err_destination">Could not write new files in this folder. Choose another folder in Files.</string>
+    <string name="batch_err_original">The app could not read an original file for this photo.</string>
+    <string name="batch_err_nef">This High Efficiency Nikon RAW cannot be rendered. Try Original + XMP.</string>
+    <string name="batch_err_file">This photo could not be exported.</string>
+</resources>

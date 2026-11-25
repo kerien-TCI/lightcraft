@@ -1,7 +1,7 @@
 //! Smartphone canvas tools: convert bounded UI gestures into edits on the real engine.
 //! No disk paths or unfiltered command names pass through this API.
 use lightcraft_catalog::PhotoId;
-use lightcraft_develop::{BrushStroke, LocalAdjustments, Mask, MaskComponent, MaskShape};
+use lightcraft_develop::{BrushStroke, LocalAdjustments, MAX_RED_EYES, Mask, MaskComponent, MaskOp, MaskShape, RedEye};
 use lightcraft_engine::Session;
 use lightcraft_engine::export::{ExportOptions, encode_rendered};
 use serde_json::{Value, json};
@@ -18,6 +18,8 @@ pub(super) fn handles(op: &str) -> bool {
             | "canvas_mask_adjust"
             | "canvas_mask_delete"
             | "canvas_mask_effect"
+            | "canvas_mask_component"
+            | "canvas_eyes"
             | "canvas_crop"
             | "canvas_remove"
             | "canvas_guide"
@@ -63,7 +65,27 @@ fn curves(s: &mut Session, p: &Value) -> Reply<()> {
 }
 
 fn list_masks(d: &lightcraft_develop::DevelopSettings) -> Vec<Value> {
-    d.masks.iter().map(|m| json!({"id":m.id,"name":m.name,"visible":m.visible,"invert":m.invert,"adjust":m.adjust})).collect()
+    d.masks
+        .iter()
+        .map(|m| {
+            let components = m
+                .components
+                .iter()
+                .map(|c| {
+                    json!({
+                        "operation":c.op,"invert":c.invert,"name":c.name,
+                        "type":match c.shape {
+                            MaskShape::Brush {..} => "brush", MaskShape::Linear {..} => "linear",
+                            MaskShape::Radial {..} => "radial", MaskShape::LuminanceRange {..} => "luminance",
+                            MaskShape::Sky => "sky", MaskShape::Subject => "subject", MaskShape::Background => "background",
+                            _ => "other"
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            json!({"id":m.id,"name":m.name,"visible":m.visible,"invert":m.invert,"adjust":m.adjust,"components":components,"refine":m.refine})
+        })
+        .collect()
 }
 
 fn info(s: &mut Session, id: PhotoId) -> Reply<Value> {
@@ -98,7 +120,11 @@ fn info(s: &mut Session, id: PhotoId) -> Reply<Value> {
         },
         "crop":{"rect":[r.x0,r.y0,r.x1,r.y1],"angle":d.crop.geometry.angle, "flipH":d.crop.flip_h,"flipV":d.crop.flip_v},
         "masks":list_masks(&d),
-        "spots":d.spots.len()
+        "spots":d.spots.len(),
+        "redEyes":d.red_eye.iter().map(|e| {
+            let xy=coord([e.center.x,e.center.y],d.crop.flip_h,d.crop.flip_v);
+            json!({"center":xy,"rx":e.rx,"ry":e.ry,"pet":e.pet,"pupilSize":e.pupil_size,"darken":e.darken,"catchlight":e.catchlight.is_some()})
+        }).collect::<Vec<_>>()
     }))
 }
 
@@ -139,8 +165,7 @@ fn local_values(p: &Value) -> Reply<Value> {
     Ok(Value::Object(out))
 }
 
-fn new_mask(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
-    let current = s.develop_of(id).ok_or("selection")?;
+fn shape(current: &lightcraft_develop::DevelopSettings, p: &Value) -> Reply<MaskShape> {
     let coordinates = |xy| coord(xy, current.crop.flip_h, current.crop.flip_v);
     let shape = match p["shape"].as_str().ok_or("edit")? {
         "linear" => {
@@ -168,9 +193,44 @@ fn new_mask(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
             let hi = number(&p["hi"], lo, 1.)?;
             json!({"kind":"luminanceRange","lo":lo,"hi":hi,"lo_feather":0.1,"hi_feather":0.1})
         }
+        kind @ ("sky" | "subject" | "background") => json!({"kind":kind}),
         _ => return Err("edit"),
     };
-    let shape: MaskShape = serde_json::from_value(shape).map_err(|_| "edit")?;
+    serde_json::from_value(shape).map_err(|_| "edit")
+}
+
+fn mask_op(p: &Value) -> Reply<MaskOp> {
+    match p.as_str() {
+        Some("add") => Ok(MaskOp::Add),
+        Some("subtract") => Ok(MaskOp::Subtract),
+        Some("intersect") => Ok(MaskOp::Intersect),
+        _ => Err("edit"),
+    }
+}
+
+fn new_mask(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
+    let current = s.develop_of(id).ok_or("selection")?;
+    let shape = shape(&current, p)?;
+    if !p["mask"].is_null() {
+        let target = p["mask"].as_u64().and_then(|v| u32::try_from(v).ok()).ok_or("edit")?;
+        let mut to_add = (*current).clone();
+        // Normalize a separately drawn component to the same on-photo space as old ones.
+        to_add.masks = vec![Mask {
+            on_photo: false,
+            components: vec![MaskComponent { name: None, op: mask_op(&p["combine"])?, invert: false, shape }],
+            ..Default::default()
+        }];
+        s.attach_masks(id, &current, &mut to_add);
+        let c = to_add.masks.pop().and_then(|mut m| m.components.pop()).ok_or("edit")?;
+        let mut d = (*current).clone();
+        s.attach_masks(id, &current, &mut d);
+        let mask = d.masks.iter_mut().find(|m| m.id == target).ok_or("edit")?;
+        if mask.components.len() >= 64 {
+            return Err("edit");
+        }
+        mask.components.push(c);
+        return execute(s, "develop.merge", &json!({"settings":{"masks":d.masks},"label":"Combine Mask"}));
+    }
     let adjust: LocalAdjustments = serde_json::from_value(local_values(p)?).map_err(|_| "edit")?;
     let next_id = current.next_mask_id();
     let name = p["name"].as_str().map(str::trim).filter(|n| !n.is_empty() && n.chars().count() <= 80).ok_or("edit")?;
@@ -204,6 +264,9 @@ fn existing_mask(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
     }
     if let Some(invert) = p["invert"].as_bool() {
         mask.invert = invert;
+    }
+    if !p["refine"].is_null() {
+        mask.refine = number(&p["refine"], 0., 100.)?;
     }
     if let Some(name) = p["name"].as_str().map(str::trim).filter(|n| !n.is_empty() && n.chars().count() <= 80) {
         mask.name = name.into();
@@ -276,16 +339,77 @@ fn lens_brush(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
     )
 }
 
+fn mask_component(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
+    let d = s.develop_of(id).ok_or("selection")?;
+    let mask = p["mask"].as_u64().and_then(|i| u32::try_from(i).ok()).ok_or("edit")?;
+    let idx = p["index"].as_u64().and_then(|i| usize::try_from(i).ok()).ok_or("edit")?;
+    let m = d.masks.iter().find(|x| x.id == mask).ok_or("edit")?;
+    if idx >= m.components.len() {
+        return Err("edit");
+    }
+    let action = p["action"].as_str().ok_or("edit")?;
+    let req = match action {
+        "op" if idx > 0 => json!({"id":mask,"component":idx,"action":action,"op":mask_op(&p["op"])?}),
+        "invert" | "delete" => json!({"id":mask,"component":idx,"action":action}),
+        "duplicate" if m.components.len() < 64 => json!({"id":mask,"component":idx,"action":action}),
+        _ => return Err("edit"),
+    };
+    execute(s, "mask.component", &req)
+}
+
+fn red_eye(s: &mut Session, id: PhotoId, p: &Value) -> Reply<()> {
+    let d = s.develop_of(id).ok_or("selection")?;
+    let mut eyes = d.red_eye.clone();
+    let action = p["action"].as_str().ok_or("edit")?;
+    if action == "delete" {
+        let i = p["index"].as_u64().ok_or("edit")?;
+        return execute(s, "redeye.delete", &json!({"index":i}));
+    }
+    let label = match action {
+        "add" if eyes.len() < MAX_RED_EYES => {
+            let pet = p["pet"].as_bool().unwrap_or(false);
+            let center = coord(pair(&p["center"])?, d.crop.flip_h, d.crop.flip_v);
+            let correction: RedEye = serde_json::from_value(json!({
+                "center":point(center),"rx":number(&p["rx"],0.001,0.5)?,"ry":number(&p["ry"],0.001,0.5)?,
+                "pupil_size":number(&p["pupilSize"],0.,100.)?,"darken":number(&p["darken"],0.,100.)?,"pet":pet,
+                "catchlight":if pet && p["catchlight"].as_bool()==Some(true) {point([-0.35,-0.35])} else {Value::Null}
+            }))
+            .map_err(|_| "edit")?;
+            eyes.push(correction);
+            if pet { "Pet Eye" } else { "Red Eye" }
+        }
+        "adjust" => {
+            let i = p["index"].as_u64().and_then(|i| usize::try_from(i).ok()).ok_or("edit")?;
+            let e = eyes.get_mut(i).ok_or("edit")?;
+            e.pupil_size = number(&p["pupilSize"], 0., 100.)?;
+            e.darken = number(&p["darken"], 0., 100.)?;
+            if e.pet
+                && let Some(on) = p["catchlight"].as_bool()
+            {
+                e.catchlight = if on { e.catchlight.or_else(|| serde_json::from_value(point([-0.35, -0.35])).ok()) } else { None };
+            }
+            if e.pet { "Adjust Pet Eye" } else { "Adjust Red Eye" }
+        }
+        _ => return Err("edit"),
+    };
+    execute(s, "develop.merge", &json!({"settings":{"red_eye":eyes},"label":label}))
+}
+
 pub(super) fn run(s: &mut Session, id: PhotoId, op: &str, p: &Value) -> Reply<Vec<u8>> {
     match op {
         "canvas_info" => return info(s, id).map(|v| v.to_string().into_bytes()),
         "canvas_source" => {
             // Crop and masks need a photo-space source, not the already cropped loupe.
             let mut job = s.render_job(id, 960, 960, false, false).ok_or("selection")?;
-            if p["tool"] == "guide" {
+            if p["tool"] == "guide" || p["tool"] == "eyes" {
                 // The command stores guides before the perspective transform; render that space
                 // without changing the catalogue, retaining both the lens correction and flips.
-                std::sync::Arc::make_mut(&mut job.settings).geometry = Default::default();
+                let settings = std::sync::Arc::make_mut(&mut job.settings);
+                settings.geometry = Default::default();
+                if p["tool"] == "eyes" {
+                    // The detector locates the pupil on unwarped photo pixels.
+                    settings.optics = Default::default();
+                }
             }
             let r = job.run();
             let r = r.rendered.map_err(|error| if error.contains("High Efficiency") || error.contains("HE★") { "nef_he" } else { "unsupported" })?;
@@ -303,6 +427,8 @@ pub(super) fn run(s: &mut Session, id: PhotoId, op: &str, p: &Value) -> Reply<Ve
             let name = p["name"].as_str().map(str::trim).filter(|name| !name.is_empty() && name.chars().count() <= 160).ok_or("edit")?;
             execute(s, "mask.applyEffect", &json!({"id":mask,"name":name}))?;
         }
+        "canvas_mask_component" => mask_component(s, id, p)?,
+        "canvas_eyes" => red_eye(s, id, p)?,
         "canvas_crop" => crop(s, p)?,
         "canvas_remove" => remove(s, id, p)?,
         "canvas_guide" => guide(s, id, p)?,
@@ -406,5 +532,76 @@ mod tests {
         let read_info = serde_json::from_slice::<Value>(&lab.action("canvas_info", &args).unwrap()).unwrap();
         assert_eq!(read_info["guides"].as_array().unwrap().len(), 2);
         assert_eq!(read_info["lensStrokes"]["focus"], 1);
+    }
+
+    #[test]
+    fn offline_combined_masks_and_eye_repairs_change_local_pixels() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("import/local.png");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let img = Rgba8::from_fn(240, 160, |x, y| {
+            if (x as f64 - 60.).hypot(y as f64 - 100.) < 10. {
+                [235, 20, 22, 255]
+            } else if (x as f64 - 155.).hypot(y as f64 - 100.) < 9. {
+                [232, 230, 40, 255]
+            } else if y < 50 {
+                [80, 143, 235, 255]
+            } else {
+                [100, 100, 101, 255]
+            }
+        });
+        let png = encode_png(&EncodeImage::rgba8(&img), &EncodeMeta::default()).unwrap();
+        std::fs::write(&path, &png).unwrap();
+        let mut lab = Lab::start(dir.path()).unwrap();
+        assert_eq!(lab.import(&json!({"paths":[path]})).unwrap()["imported"], 1);
+        let id = lab.session.catalog.photos().next().unwrap().id.0;
+        let args = json!({"id":id,"edge":320});
+        let pixel = |p: &lightcraft_codecs::Decoded, x: usize, y: usize| p.image.data[y * p.image.width + x];
+        let decode_jpeg = |bytes: Vec<u8>| decode(&bytes, DecodeOptions::default()).unwrap();
+        let initial = decode_jpeg(lab.action("render", &args).unwrap());
+        let payload = json!({"id":id,"action":"add","center":[0.25,0.625],"rx":0.085,"ry":0.075,
+            "pupilSize":65,"darken":60});
+        lab.action("canvas_eyes", &payload).unwrap();
+        let red = decode_jpeg(lab.action("render", &args).unwrap());
+        let (a, b) = (pixel(&initial, 60, 100), pixel(&red, 60, 100));
+        assert!(a[0] - a[1] > 0.3 && b[0] - b[1] < 0.5 * (a[0] - a[1]), "{a:?} -> {b:?}");
+        lab.action(
+            "canvas_eyes",
+            &json!({"id":id,"action":"add","center":[155.0/240.0,0.625],
+            "rx":0.085,"ry":0.075,"pet":true,"catchlight":true,"pupilSize":55,"darken":62}),
+        )
+        .unwrap();
+        let both = decode_jpeg(lab.action("render", &args).unwrap());
+        assert!(pixel(&both, 155, 100)[1] < pixel(&red, 155, 100)[1] * 0.7);
+        let state = serde_json::from_slice::<Value>(&lab.action("canvas_info", &args).unwrap()).unwrap();
+        assert_eq!(state["redEyes"][1]["catchlight"], true);
+        lab.action("canvas_eyes", &json!({"id":id,"action":"adjust","index":1,"pupilSize":45,"darken":45,"catchlight":false})).unwrap();
+        lab.action("canvas_mask", &json!({"id":id,"name":"Sky","shape":"sky","values":{"exposure":-2.0}})).unwrap();
+        let dark = decode_jpeg(lab.action("render", &args).unwrap());
+        let sb = pixel(&both, 111, 20)[2];
+        let sd = pixel(&dark, 111, 20)[2];
+        assert!(sd < sb, "{sd} should be darker than {sb}");
+        let state = serde_json::from_slice::<Value>(&lab.action("canvas_info", &args).unwrap()).unwrap();
+        let mask = state["masks"][0]["id"].as_u64().unwrap();
+        lab.action(
+            "canvas_mask",
+            &json!({"id":id,"shape":"radial","center":[111.0/240.0,20.0/160.0],
+            "rx":0.25,"ry":0.15,"feather":25.0,"mask":mask,"combine":"subtract"}),
+        )
+        .unwrap();
+        let mixed = decode_jpeg(lab.action("render", &args).unwrap());
+        assert!(pixel(&mixed, 111, 20)[2] > sd);
+        lab.action("canvas_mask_component", &json!({"id":id,"mask":mask,"index":1,"action":"op","op":"intersect"})).unwrap();
+        lab.action("canvas_mask_component", &json!({"id":id,"mask":mask,"index":1,"action":"delete"})).unwrap();
+        lab.action("canvas_mask", &json!({"id":id,"shape":"subject","name":"Subject","values":{"saturation":-40.0}})).unwrap();
+        lab.action("canvas_mask", &json!({"id":id,"shape":"background","name":"Background","values":{"saturation":-25.0}})).unwrap();
+        lab.session.close_library().unwrap();
+        drop(lab);
+        let mut reopened = Lab::start(dir.path()).unwrap();
+        let state = serde_json::from_slice::<Value>(&reopened.action("canvas_info", &args).unwrap()).unwrap();
+        assert_eq!(state["masks"][1]["components"][0]["type"], "subject");
+        assert_eq!(state["masks"][2]["components"][0]["type"], "background");
+        assert_eq!(state["redEyes"][1]["pupilSize"], 45.0);
+        assert_eq!(std::fs::read(&path).unwrap(), png);
     }
 }

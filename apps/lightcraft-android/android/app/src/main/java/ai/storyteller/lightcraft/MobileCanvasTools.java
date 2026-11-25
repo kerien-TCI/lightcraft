@@ -12,6 +12,7 @@ import android.graphics.PointF;
 import android.graphics.RectF;
 import android.text.InputFilter;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -40,6 +41,14 @@ final class MobileCanvasTools {
     private static final int CANVAS = 0xff0b111a, ACCENT = 0xfff6b861;
     private static final int TEXT = 0xffecf0f6;
     private static final String[] CHANNELS = {"master", "red", "green", "blue"};
+    private static final String[] MASKS = {"linear", "radial", "brush", "luminance", "subject", "sky", "background"};
+    private static final String[] MASK_OPERATIONS = {"add", "subtract", "intersect"};
+    private static final int[] MASK_NAMES = {R.string.canvas_linear,R.string.canvas_radial,R.string.canvas_brush,
+        R.string.canvas_luminance,R.string.canvas_subject,R.string.canvas_sky,R.string.canvas_background};
+    private static final int[] MASK_HINTS = {R.string.canvas_linear_hint,R.string.canvas_radial_hint,R.string.canvas_brush_hint,
+        R.string.canvas_luminance_hint,R.string.canvas_estimate_hint,R.string.canvas_estimate_hint,R.string.canvas_estimate_hint};
+    private static final int[] MASK_OP_NAMES = {R.string.canvas_mask_add,R.string.canvas_mask_subtract,R.string.canvas_mask_intersect};
+
     private static final int[] CHANNEL_NAMES = {R.string.canvas_rgb, R.string.canvas_red, R.string.canvas_green, R.string.canvas_blue};
 
     private MobileCanvasTools() {}
@@ -52,6 +61,7 @@ final class MobileCanvasTools {
             case "remove" -> { if (bitmap != null) showRetouch(a, bitmap, info, apply); }
             case "guide" -> { if (bitmap != null) showGuides(a, bitmap, info, apply); }
             case "lensBrush" -> { if (bitmap != null) showLensBrush(a, bitmap, info, apply); }
+            case "eyes" -> { if (bitmap != null) showEyes(a, bitmap, info, apply); }
             default -> {}
         }
     }
@@ -403,36 +413,37 @@ final class MobileCanvasTools {
                                        BiConsumer<String, JSONObject> apply) {
         JSONArray existing = info.optJSONArray("masks");
         int count = existing == null ? 0 : existing.length();
-        String[] options = new String[count + 4];
-        options[0] = a.getString(R.string.canvas_linear);
-        options[1] = a.getString(R.string.canvas_radial);
-        options[2] = a.getString(R.string.canvas_brush);
-        options[3] = a.getString(R.string.canvas_luminance);
+        String[] options = new String[count + MASKS.length];
+        for (int i = 0; i < MASKS.length; i++) options[i] = a.getString(MASK_NAMES[i]);
         for (int i = 0; i < count; i++) {
             JSONObject m = existing.optJSONObject(i);
-            options[i + 4] = a.getString(R.string.canvas_existing, m == null ? "" : m.optString("name"));
+            options[i + MASKS.length] = a.getString(R.string.canvas_existing, m == null ? "" : m.optString("name"));
         }
         new AlertDialog.Builder(a).setTitle(R.string.canvas_masks)
             .setItems(options, (dialog, i) -> {
-                if (i < 4) showNewMask(a, bitmap, i, apply);
+                if (i < MASKS.length) showNewMask(a, bitmap, i, -1, "", apply);
                 else {
-                    JSONObject m = existing.optJSONObject(i - 4);
-                    if (m != null) showExistingMask(a, m, info.optJSONArray("effects"), apply);
+                    JSONObject m = existing.optJSONObject(i - MASKS.length);
+                    if (m != null) showExistingMask(a, bitmap, m, info.optJSONArray("effects"), apply);
                 }
             }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
-    private static void showNewMask(Activity a, Bitmap bitmap, int kind,
+    private static void showNewMask(Activity a, Bitmap bitmap, int kind, long parentMask, String op,
                                     BiConsumer<String, JSONObject> apply) {
         LinearLayout panel = column(a);
-        String[] modes = {"linear", "radial", "brush", "luminance"};
-        int[] labels = {R.string.canvas_linear, R.string.canvas_radial, R.string.canvas_brush, R.string.canvas_luminance};
-        int[] hints = {R.string.canvas_linear_hint, R.string.canvas_radial_hint, R.string.canvas_brush_hint, R.string.canvas_luminance_hint};
-        tip(panel, hints[kind]);
-        GestureView view = new GestureView(a, bitmap, modes[kind]);
+        tip(panel, MASK_HINTS[kind]);
+        GestureView view = new GestureView(a, bitmap, MASKS[kind]);
         if (kind < 3) {
             board(panel, view, a);
             panel.addView(button(a, R.string.canvas_place_center, view::center));
+        } else if (kind >= 4) {
+            // This is a view of the photo, not a claim about what the algorithm selected.
+            view.setContentDescription(a.getString(R.string.canvas_estimate_preview));
+            view.setClickable(false);
+            view.setFocusable(false);
+            view.setEnabled(false);
+            board(panel, view, a);
         }
         final double[] vals = {.04, 50, .55, 1};
         if (kind == 2) {
@@ -445,16 +456,17 @@ final class MobileCanvasTools {
             slider(panel, R.string.canvas_luminance_low, 0, 100, 55, 1, v -> vals[2] = v / 100.);
             slider(panel, R.string.canvas_luminance_high, 0, 100, 100, 1, v -> vals[3] = v / 100.);
         }
-        EditText name = editName(a, a.getString(labels[kind]));
-        panel.addView(name);
+        EditText name = editName(a, a.getString(MASK_NAMES[kind]));
+        if (parentMask < 0) panel.addView(name);
         Map<String, Double> edits = new LinkedHashMap<>();
-        localControls(panel, null, edits);
-        modal(a, labels[kind], panel, () -> {
+        if (parentMask < 0) localControls(panel, null, edits);
+        modal(a, MASK_NAMES[kind], panel, () -> {
             String label = name.getText().toString().trim();
             if (label.isEmpty()) { name.setError(a.getString(R.string.canvas_name)); return false; }
             if (kind < 3 && !view.hasShape()) return false;
             if (kind == 3 && vals[3] < vals[2]) return false;
-            JSONObject payload = json("shape", modes[kind], "name", label, "values", new JSONObject(edits));
+            JSONObject payload = json("shape", MASKS[kind], "name", label, "values", new JSONObject(edits));
+            if (parentMask >= 0) { put(payload, "mask", parentMask); put(payload, "combine", op); }
             // A mask with no local adjustment is still saved so it can be edited later.
             if (edits.isEmpty()) put(payload, "values", json("exposure", 0));
             if (kind == 0) {
@@ -467,7 +479,7 @@ final class MobileCanvasTools {
                 put(payload, "feather", vals[1]);
             } else if (kind == 2) {
                 put(payload, "points", view.brushData()); put(payload, "size", vals[0]); put(payload, "feather", vals[1]);
-            } else {
+            } else if (kind == 3) {
                 put(payload, "lo", vals[2]); put(payload, "hi", vals[3]);
             }
             apply.accept("canvas_mask", payload);
@@ -485,7 +497,7 @@ final class MobileCanvasTools {
         return input;
     }
 
-    private static void showExistingMask(Activity a, JSONObject mask, JSONArray effects, BiConsumer<String, JSONObject> apply) {
+    private static void showExistingMask(Activity a, Bitmap bitmap, JSONObject mask, JSONArray effects, BiConsumer<String, JSONObject> apply) {
         LinearLayout panel = column(a);
         long id = mask.optLong("id", -1);
         if (id < 0) return;
@@ -496,6 +508,8 @@ final class MobileCanvasTools {
         invert.setText(R.string.canvas_invert); invert.setChecked(mask.optBoolean("invert", false));
         panel.addView(visible); panel.addView(invert);
         Map<String, Double> changes = new LinkedHashMap<>();
+        double[] refine = {mask.optDouble("refine", 0)};
+        slider(panel,R.string.canvas_refine_edges,0,100,(int) Math.round(refine[0]),1,v->refine[0]=v);
         localControls(panel, mask.optJSONObject("adjust"), changes);
         AlertDialog dialog = modal(a, R.string.canvas_masks, panel, () -> {
             String chosenName = name.getText().toString().trim();
@@ -506,7 +520,7 @@ final class MobileCanvasTools {
                 put(values, "exposure", old == null ? 0. : old.optDouble("exposure", 0.));
             }
             apply.accept("canvas_mask_adjust", json("mask", id, "values", values, "name", chosenName,
-                "visible", visible.isChecked(), "invert", invert.isChecked()));
+                "visible", visible.isChecked(), "invert", invert.isChecked(), "refine", refine[0]));
             return true;
         });
         Button delete = button(a, R.string.canvas_delete_mask, () ->
@@ -515,6 +529,15 @@ final class MobileCanvasTools {
                     apply.accept("canvas_mask_delete", json("mask", id)); dialog.dismiss();
                 }).show());
         panel.addView(delete, 1);
+        panel.addView(button(a,R.string.canvas_mask_combine,()->selectMaskOperation(a, operation -> {
+            new AlertDialog.Builder(a).setTitle(R.string.canvas_mask_combine).setItems(texts(a,MASK_NAMES), (dd, kind)-> {
+                dialog.dismiss(); showNewMask(a,bitmap,kind,id,operation,apply);
+            }).setNegativeButton(android.R.string.cancel,null).show();
+        })),2);
+        JSONArray components = mask.optJSONArray("components");
+        if (components != null && components.length() > 0) {
+            panel.addView(button(a,R.string.canvas_mask_components,()->componentPicker(a,id,components,dialog,apply)),3);
+        }
         if (effects != null && effects.length() > 0) {
             ArrayList<String> names = new ArrayList<>();
             for (int i = 0; i < effects.length(); i++) {
@@ -527,6 +550,51 @@ final class MobileCanvasTools {
                         apply.accept("canvas_mask_effect", json("mask",id,"name",names.get(n))); dialog.dismiss();
                     }).setNegativeButton(android.R.string.cancel, null).show()), 2);
         }
+    }
+
+    private static String[] texts(Activity a, int[] resources) {
+        String[] labels = new String[resources.length];
+        for (int i=0;i<resources.length;i++) labels[i]=a.getString(resources[i]);
+        return labels;
+    }
+
+    private static void selectMaskOperation(Activity a, java.util.function.Consumer<String> action) {
+        new AlertDialog.Builder(a).setTitle(R.string.canvas_mask_combine)
+            .setItems(texts(a,MASK_OP_NAMES),(d,i)->action.accept(MASK_OPERATIONS[i]))
+            .setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private static void componentPicker(Activity a, long mask, JSONArray components, AlertDialog parent,
+                                        BiConsumer<String,JSONObject> apply) {
+        String[] labels = new String[components.length()];
+        for (int i=0;i<labels.length;i++) {
+            JSONObject c=components.optJSONObject(i);
+            String title = c == null ? "" : c.optString("name", "");
+            if (title.isBlank() || "null".equals(title)) {
+                String kind=c == null ? "" : c.optString("type");
+                int k=0;
+                while (k<MASKS.length&&!MASKS[k].equals(kind)) k++;
+                title=a.getString(k==MASKS.length?R.string.canvas_mask_component:MASK_NAMES[k]);
+            }
+            labels[i]=(i+1)+". "+title;
+        }
+        new AlertDialog.Builder(a).setTitle(R.string.canvas_mask_components).setItems(labels,(d,i)->{
+            int[] actions = i == 0 ? new int[]{R.string.canvas_invert,R.string.canvas_duplicate_component,R.string.canvas_delete_component}
+                : new int[]{R.string.canvas_invert,R.string.canvas_duplicate_component,R.string.canvas_delete_component,R.string.canvas_mask_combine};
+            new AlertDialog.Builder(a).setTitle(labels[i]).setItems(texts(a,actions),(dd,action)->{
+                if(action==3) {
+                    selectMaskOperation(a, op -> {apply.accept("canvas_mask_component",json("mask",mask,"index",i,"action","op","op",op));parent.dismiss();});
+                    return;
+                }
+                String which = new String[]{"invert","duplicate","delete"}[action];
+                Runnable confirm=()->{apply.accept("canvas_mask_component",json("mask",mask,"index",i,"action",which));parent.dismiss();};
+                if(action==2) new AlertDialog.Builder(a)
+                    .setMessage(labels.length==1?R.string.canvas_delete_mask_confirm:R.string.canvas_delete_component)
+                    .setPositiveButton(R.string.canvas_delete_component,(ddd,ignored)->confirm.run())
+                    .setNegativeButton(android.R.string.cancel,null).show();
+                else confirm.run();
+            }).setNegativeButton(android.R.string.cancel,null).show();
+        }).setNegativeButton(android.R.string.cancel,null).show();
     }
 
     private static void showCrop(Activity a, Bitmap bitmap, JSONObject info, BiConsumer<String, JSONObject> apply) {
@@ -660,6 +728,74 @@ final class MobileCanvasTools {
         }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
+    private static void showEyes(Activity a, Bitmap bitmap, JSONObject info, BiConsumer<String, JSONObject> apply) {
+        JSONArray eyes = info.optJSONArray("redEyes");
+        int count = eyes == null ? 0 : eyes.length();
+        String[] opts=new String[count+2];
+        opts[0]=a.getString(R.string.canvas_redeye);
+        opts[1]=a.getString(R.string.canvas_peteye);
+        for(int i=0;i<count;i++){
+            JSONObject e=eyes.optJSONObject(i);
+            opts[i+2]=a.getString(R.string.canvas_eye_existing,i+1,a.getString(e!=null&&e.optBoolean("pet")?R.string.canvas_peteye:R.string.canvas_redeye));
+        }
+        new AlertDialog.Builder(a).setTitle(R.string.canvas_eyes).setItems(opts,(d,i)->{
+            if(i<2) eyeEditor(a,bitmap,i==1,-1,null,apply);
+            else {
+                JSONObject e=eyes.optJSONObject(i-2);
+                if(e!=null) eyeEditor(a,bitmap,e.optBoolean("pet"),i-2,e,apply);
+            }
+        }).setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private static void eyeEditor(Activity a,Bitmap bitmap,boolean pet,int index,JSONObject current,
+                                BiConsumer<String,JSONObject> apply) {
+        LinearLayout panel=column(a);
+        boolean fresh=index<0;
+        int mode=pet?R.string.canvas_peteye:R.string.canvas_redeye;
+        tip(panel,fresh?R.string.canvas_eye_hint:R.string.canvas_eye_adjust_hint);
+        GestureView view=new GestureView(a,bitmap,"eye");
+        view.setContentDescription(a.getString(R.string.canvas_eye_area));
+        if(!fresh){
+            JSONArray center=current.optJSONArray("center");
+            if(center!=null&&center.length()==2){
+                float w=bitmap.getWidth(),h=bitmap.getHeight(),longest=Math.max(w,h);
+                PointF c=new PointF((float)center.optDouble(0),(float)center.optDouble(1));
+                float dx=(float)current.optDouble("rx")*longest/w, dy=(float)current.optDouble("ry")*longest/h;
+                view.start=new PointF(c.x-dx,c.y-dy);view.end=new PointF(c.x+dx,c.y+dy);
+            }
+            view.eyeEdit=false;
+        }
+        board(panel,view,a);
+        if(fresh) panel.addView(button(a,R.string.canvas_place_center,view::center));
+        panel.addView(button(a,R.string.canvas_eye_fit,view::resetZoom));
+        double[] values={fresh?50:current.optDouble("pupilSize",50),fresh?50:current.optDouble("darken",50)};
+        slider(panel,R.string.canvas_eye_size,0,100,(int)Math.round(values[0]),1,v->values[0]=v);
+        slider(panel,R.string.canvas_eye_darken,0,100,(int)Math.round(values[1]),1,v->values[1]=v);
+        CheckBox catchlight=new CheckBox(a);
+        if(pet){
+            catchlight.setText(R.string.canvas_eye_catchlight);
+            catchlight.setChecked(!fresh&&current.optBoolean("catchlight"));
+            panel.addView(catchlight);
+        }
+        AlertDialog dialog=modal(a,mode,panel,()->{
+            if(fresh&&!view.hasShape()) return false;
+            JSONObject data=json("action",fresh?"add":"adjust","pet",pet,"index",index,
+                "pupilSize",values[0],"darken",values[1],"catchlight",pet&&catchlight.isChecked());
+            if(fresh){
+                put(data,"center",pair(new PointF((view.start.x+view.end.x)/2,(view.start.y+view.end.y)/2)));
+                double w=bitmap.getWidth(),h=bitmap.getHeight(),longest=Math.max(w,h);
+                put(data,"rx",Math.max(.001,Math.abs(view.start.x-view.end.x)*w/longest/2));
+                put(data,"ry",Math.max(.001,Math.abs(view.start.y-view.end.y)*h/longest/2));
+            }
+            apply.accept("canvas_eyes",data);
+            return true;
+        });
+        if(!fresh) panel.addView(button(a,R.string.canvas_eye_delete,()->new AlertDialog.Builder(a)
+            .setMessage(R.string.canvas_eye_delete_confirm).setPositiveButton(R.string.canvas_eye_delete,
+                (d,unused)->{apply.accept("canvas_eyes",json("action","delete","index",index));dialog.dismiss();})
+            .setNegativeButton(android.R.string.cancel,null).show()));
+    }
+
     /** The preview owns its coordinate transform; stored gestures are independent of screen size. */
     private static final class GestureView extends View {
         private final Bitmap bitmap;
@@ -669,17 +805,48 @@ final class MobileCanvasTools {
         private final ArrayList<PointF> stroke = new ArrayList<>();
         final ArrayList<PointF[]> guides = new ArrayList<>(4);
         PointF start, end;
+        private PointF eyePreviousStart,eyePreviousEnd;
         RectF savedRect;
         float radius = .04f, angle;
         boolean flipH, flipV;
+        boolean eyeEdit = true;
+        private final ScaleGestureDetector pinch;
+        private float zoom=1, panX,panY,panStartX,panStartY;
+        private boolean pinching;
+        private boolean drawing;
 
         GestureView(Activity a, Bitmap bitmap, String mode) {
             super(a);
             this.bitmap = bitmap;
             this.mode = mode;
+            pinch = "eye".equals(mode)?new ScaleGestureDetector(a,new ScaleGestureDetector.SimpleOnScaleGestureListener(){
+                @Override public boolean onScaleBegin(ScaleGestureDetector detector){
+                    panStartX=detector.getFocusX();panStartY=detector.getFocusY();return true;
+                }
+                @Override public boolean onScale(ScaleGestureDetector detector){
+                    float next=Math.max(1,Math.min(8,zoom*detector.getScaleFactor()));
+                    float ratio=next/zoom;
+                    float centerX=getWidth()/2f,centerY=getHeight()/2f;
+                    float fx=detector.getFocusX(),fy=detector.getFocusY();
+                    panX=fx-centerX-(panStartX-centerX-panX)*ratio;
+                    panY=fy-centerY-(panStartY-centerY-panY)*ratio;
+                    panStartX=fx;panStartY=fy;zoom=next;
+                    clampPan();invalidate();return true;
+                }
+            }):null;
+            if(pinch!=null) pinch.setQuickScaleEnabled(false);
             setFocusable(true);
             setClickable(true);
             setContentDescription(a.getString(R.string.canvas_photo_surface));
+        }
+
+        void resetZoom(){zoom=1;panX=0;panY=0;invalidate();}
+
+        private void clampPan(){
+            float f=Math.min(getWidth()/(float)bitmap.getWidth(),getHeight()/(float)bitmap.getHeight());
+            float maxX=Math.max(0,(f*bitmap.getWidth()*zoom-getWidth())/2);
+            float maxY=Math.max(0,(f*bitmap.getHeight()*zoom-getHeight())/2);
+            panX=Math.max(-maxX,Math.min(maxX,panX));panY=Math.max(-maxY,Math.min(maxY,panY));
         }
 
         private float sx(float x) { return image.left + image.width() * x; }
@@ -707,6 +874,8 @@ final class MobileCanvasTools {
         void center() {
             if ("brush".equals(mode)) {
                 stroke.clear(); stroke.add(new PointF(.5f, .5f));
+            } else if ("eye".equals(mode)) {
+                start = new PointF(.475f,.475f);end = new PointF(.525f,.525f);
             } else {
                 start = new PointF(.25f, .25f); end = new PointF(.75f, .75f);
             }
@@ -722,7 +891,8 @@ final class MobileCanvasTools {
                 RectF r = newRect();
                 return r != null && r.width() > .035 && r.height() > .035;
             }
-            return Math.abs(start.x-end.x) > .02f && Math.abs(start.y-end.y) > .02f;
+            float min="eye".equals(mode)?.0025f:.02f;
+            return Math.abs(start.x-end.x)>min&&Math.abs(start.y-end.y)>min;
         }
 
         JSONArray brushData() {
@@ -735,8 +905,8 @@ final class MobileCanvasTools {
             super.onDraw(canvas);
             canvas.drawColor(CANVAS);
             float scale = Math.min(getWidth() / (float) bitmap.getWidth(), getHeight() / (float) bitmap.getHeight());
-            float w = scale * bitmap.getWidth(), h = scale * bitmap.getHeight();
-            image.set((getWidth() - w)/2, (getHeight() - h)/2, (getWidth() + w)/2, (getHeight() + h)/2);
+            float w = scale * bitmap.getWidth()*zoom, h = scale * bitmap.getHeight()*zoom;
+            image.set((getWidth() - w)/2+panX, (getHeight() - h)/2+panY, (getWidth() + w)/2+panX, (getHeight() + h)/2+panY);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
             canvas.drawBitmap(bitmap, null, image, paint);
@@ -761,7 +931,7 @@ final class MobileCanvasTools {
                 paint.setStyle(Paint.Style.STROKE);
                 canvas.drawCircle(sx(end.x), sy(end.y), dp(getContext(), 7), paint);
             }
-            if ("radial".equals(mode) && start != null && end != null) {
+            if (("radial".equals(mode)||"eye".equals(mode)) && start != null && end != null) {
                 RectF ellipse = new RectF(sx(Math.min(start.x, end.x)), sy(Math.min(start.y,end.y)),
                     sx(Math.max(start.x,end.x)), sy(Math.max(start.y,end.y)));
                 paint.setColor(0x55f6b861); canvas.drawOval(ellipse, paint);
@@ -822,9 +992,27 @@ final class MobileCanvasTools {
 
         @Override public boolean onTouchEvent(MotionEvent e) {
             if (image.isEmpty()) return false;
+            if (pinch != null) {
+                if(e.getActionMasked()==MotionEvent.ACTION_POINTER_DOWN){
+                    pinching=true;
+                    if(drawing){start=eyePreviousStart;end=eyePreviousEnd;drawing=false;}
+                    if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
+                }
+                pinch.onTouchEvent(e);
+                if(pinching) {
+                    if(e.getActionMasked()==MotionEvent.ACTION_UP || e.getActionMasked()==MotionEvent.ACTION_CANCEL){
+                        pinching=false;
+                        if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);
+                    }
+                    invalidate();return true;
+                }
+                if(!eyeEdit) return true;
+            }
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN -> {
                     if (!image.contains(e.getX(), e.getY())) return false;
+                    drawing=true;
+                    if(pinch!=null){eyePreviousStart=start;eyePreviousEnd=end;}
                     if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
                     start = pointer(e.getX(), e.getY()); end = new PointF(start.x, start.y);
                     stroke.clear(); record(e.getX(), e.getY()); invalidate(); return true;
@@ -835,6 +1023,7 @@ final class MobileCanvasTools {
                 }
                 case MotionEvent.ACTION_UP -> {
                     record(e.getX(), e.getY());
+                    drawing=false;
                     if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
                     if ("guide".equals(mode)) {
                         if (hasShape()) {
@@ -848,7 +1037,9 @@ final class MobileCanvasTools {
                 }
                 case MotionEvent.ACTION_CANCEL -> {
                     if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
-                    start = null; end = null; stroke.clear(); invalidate(); return true;
+                    drawing=false;
+                    start=pinch==null?null:eyePreviousStart;end=pinch==null?null:eyePreviousEnd;
+                    stroke.clear();invalidate();return true;
                 }
                 default -> { return true; }
             }

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cull_tools">Outils de tri</string>
+    <string name="cull_virtual">Créer une copie virtuelle</string>
+    <string name="cull_copy_badge">Copie</string>
+    <string name="cull_stack_badge">Pile ×%d</string>
+    <string name="cull_compare">Comparer</string>
+    <string name="cull_survey">Vue d’ensemble</string>
+    <string name="cull_group">Grouper dans une pile</string>
+    <string name="cull_expand">Développer les piles sélectionnées</string>
+    <string name="cull_collapse">Réduire les piles sélectionnées</string>
+    <string name="cull_top">Définir comme couverture</string>
+    <string name="cull_up">Monter dans la pile</string>
+    <string name="cull_down">Descendre dans la pile</string>
+    <string name="cull_split">Scinder la pile ici</string>
+    <string name="cull_remove">Retirer de la pile</string>
+    <string name="cull_ungroup">Dégrouper les piles</string>
+    <string name="cull_expand_all">Développer toutes les piles</string>
+    <string name="cull_collapse_all">Réduire toutes les piles</string>
+    <string name="cull_optional_name">Nom de la copie (facultatif)</string>
+    <string name="cull_copy_help">La copie a ses propres réglages mais utilise le même fichier d’origine.</string>
+    <string name="cull_create">Créer</string>
+    <string name="cull_choose_top">Choisir la couverture de la pile</string>
+    <string name="cull_group_help">La photo choisie servira de couverture. Les piles contenant déjà ces photos sont fusionnées. Aucun fichier ne sera déplacé.</string>
+    <string name="cull_apply">Appliquer</string>
+    <string name="cull_saved">Catalogue mis à jour.</string>
+    <string name="cull_close">Fermer</string>
+    <string name="cull_reference">Référence</string>
+    <string name="cull_candidate">Candidate</string>
+    <string name="cull_swap">Permuter</string>
+    <string name="cull_previous">Précédente</string>
+    <string name="cull_next">Suivante</string>
+    <string name="cull_zoom_reset">Réinitialiser le zoom</string>
+    <string name="cull_no_preview">Aperçu indisponible</string>
+    <string name="cull_zoom_hint">%s. Pince pour zoomer les deux aperçus. Touche deux fois pour revenir à la vue entière.</string>
+    <string name="cull_pick">Marquer comme retenue</string>
+    <string name="cull_reject">Marquer comme rejetée</string>
+    <string name="cull_unflag">Enlever le marqueur</string>
+    <string name="cull_rate">Noter</string>
+    <string name="cull_unrated">Sans étoile</string>
+    <string name="cull_exclude">Masquer dans cette vue</string>
+    <string name="cull_picked_badge">Retenue</string>
+    <string name="cull_rejected_badge">Rejetée</string>
+    <plurals name="cull_photo_count">
+        <item quantity="one">%d photo</item>
+        <item quantity="other">%d photos</item>
+    </plurals>
+    <plurals name="cull_stars">
+        <item quantity="one">%d étoile</item>
+        <item quantity="other">%d étoiles</item>
+    </plurals>
+</resources>

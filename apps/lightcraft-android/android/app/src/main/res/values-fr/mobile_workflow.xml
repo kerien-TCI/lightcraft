@@ -1,0 +1,9 @@
+<resources>
+    <string name="flow_workflow">Flux photo</string>
+    <string name="flow_collection_import">Importer depuis Fichiers ou un dossier</string>
+    <string name="flow_one_or_more">Un ou plusieurs fichiers</string>
+    <string name="flow_folder_or_card">Dossier ou carte SD</string>
+    <string name="flow_batch">Export par lot / originaux</string>
+    <string name="flow_print">Mise en page / PDF</string>
+    <string name="flow_workflows">Comparer, vue Ensemble et piles</string>
+</resources>

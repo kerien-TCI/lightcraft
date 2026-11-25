@@ -1,0 +1,9 @@
+<resources>
+    <string name="flow_workflow">Photo workflows</string>
+    <string name="flow_collection_import">Import from files or a folder</string>
+    <string name="flow_one_or_more">One or more files</string>
+    <string name="flow_folder_or_card">Folder or SD card</string>
+    <string name="flow_batch">Batch export / originals</string>
+    <string name="flow_print">Print layout / PDF</string>
+    <string name="flow_workflows">Compare, Survey and stacks</string>
+</resources>

@@ -1,0 +1,41 @@
+<resources>
+    <string name="mobile_print_title">Print to PDF</string>
+    <string name="mobile_print_toolbar">PDF</string>
+    <string name="mobile_print_layout">Layout</string>
+    <string name="mobile_print_single">One photo per page</string>
+    <string name="mobile_print_contact">Contact sheet</string>
+    <string name="mobile_print_paper">Paper size</string>
+    <string name="mobile_print_orientation">Orientation</string>
+    <string name="mobile_print_portrait">Portrait</string>
+    <string name="mobile_print_landscape">Landscape</string>
+    <string name="mobile_print_resolution">Print resolution</string>
+    <string name="mobile_print_margin">Page margins</string>
+    <string name="mobile_print_gap">Space between photos</string>
+    <string name="mobile_print_columns">Columns</string>
+    <string name="mobile_print_rows">Rows</string>
+    <string name="mobile_print_square">Square cells</string>
+    <string name="mobile_print_fill">Fill cells (crop edges)</string>
+    <string name="mobile_print_rotate">Rotate photos to fit</string>
+    <string name="mobile_print_numbers">Show page numbers</string>
+    <string name="mobile_print_marks">Show crop marks</string>
+    <string name="mobile_print_ppi">%1$d ppi</string>
+    <string name="mobile_print_mm">%1$d mm</string>
+    <string name="mobile_print_page_index">Page %1$d of %2$d</string>
+    <string name="mobile_print_page_image">Current PDF page preview</string>
+    <string name="mobile_print_previous">Previous</string>
+    <string name="mobile_print_next">Next</string>
+    <string name="mobile_print_preview">Preview PDF</string>
+    <string name="mobile_print_preparing">Creating the print PDF…</string>
+    <string name="mobile_print_save">Save PDF</string>
+    <string name="mobile_print_filename">Photo Lab print.pdf</string>
+    <string name="mobile_print_saved">Print PDF saved. Nothing was sent to a printer.</string>
+    <string name="mobile_print_cancelled">PDF save cancelled. Originals are unchanged.</string>
+    <string name="mobile_print_failed">Could not create or save the PDF. No original was overwritten.</string>
+    <string name="mobile_print_bad_layout">This layout does not fit on the selected paper. Reduce the margins or spacing, or use bigger paper.</string>
+    <string name="mobile_print_memory_limit">This layout is too large for mobile. Lower the print resolution, select fewer photos, or use a smaller page.</string>
+    <string name="mobile_print_select_limit">Select between 1 and 80 photos to print.</string>
+    <plurals name="mobile_print_photo_count">
+        <item quantity="one">%1$d selected photo · PDF only</item>
+        <item quantity="other">%1$d selected photos · PDF only</item>
+    </plurals>
+</resources>

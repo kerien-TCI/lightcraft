@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="folder_import_title">Importer depuis un dossier</string>
+    <string name="folder_choose">Choisir un dossier ou une carte SD</string>
+    <string name="folder_rescan">Rescanner : %1$s</string>
+    <string name="folder_forget">Oublier ce dossier</string>
+    <string name="folder_forget_info">Ne plus conserver l’accès en lecture à %1$s ? Cela ne supprime aucune photo et ne modifie pas le dossier.</string>
+    <string name="folder_default_name">Dossier sélectionné</string>
+    <string name="folder_scanning">Analyse du dossier…</string>
+    <string name="folder_scan_error">Impossible de lire ce dossier. Rebranche le support ou choisis un sous-dossier accessible, tel que DCIM.</string>
+    <string name="folder_no_photos">Aucune photo prise en charge dans les limites de l’analyse. Sur une carte SD, essaie de choisir DCIM ou le sous-dossier de ton appareil.</string>
+    <string name="folder_found">Photos trouvées : %1$d
+Autres fichiers ignorés : %2$d · dossiers illisibles : %3$d</string>
+    <string name="folder_limit">L’analyse a atteint une limite. Choisis un dossier plus précis pour voir d’autres photos.</string>
+    <string name="folder_copy_only">L’appli copie les photos et lit les réglages des éventuels fichiers XMP associés. Les sources ne sont jamais modifiées. Les doublons sont ignorés selon leur contenu.</string>
+    <string name="folder_batch_help">Importe jusqu’à %1$d photos par lot. Pour le lot suivant, indique le prochain numéro de photo dans cette liste triée, ou choisis un dossier plus petit.</string>
+    <string name="folder_first">Numéro de la première photo (1 = début)</string>
+    <string name="folder_naming">Modèle de nom des fichiers</string>
+    <string name="folder_template_hint">Vide : conserver les noms d’origine</string>
+    <string name="folder_template_examples">Exemple : {date:%Y%m%d}-{seq:4}. Tu peux aussi utiliser {name} ou {folder}. L’extension est conservée.</string>
+    <string name="folder_sequence">Numéro de départ de la séquence</string>
+    <string name="folder_arrange">Classer les copies</string>
+    <string name="folder_arrange_day">Dossiers par jour de prise de vue</string>
+    <string name="folder_arrange_month">Dossiers par mois de prise de vue</string>
+    <string name="folder_arrange_flat">Ranger les copies dans un seul dossier</string>
+    <string name="folder_remember">Mémoriser ce dossier pour les rescans manuels uniquement</string>
+    <string name="folder_confirm">Copier et importer</string>
+    <string name="folder_numeric_error">Saisis un numéro dans la plage autorisée.</string>
+    <string name="folder_template_error">Utilise un modèle de nom avec des variables reconnues, sans séparateur de dossier.</string>
+    <string name="folder_copying">Copie des fichiers…</string>
+    <string name="folder_saving">Ajout des copies à la bibliothèque…</string>
+    <string name="folder_report">Photos ajoutées : %1$d
+Doublons ignorés : %2$d
+Photos rejetées par le moteur : %3$d
+Fichiers sources illisibles : %4$d
+Fichiers écartés pour leur taille : %5$d
+Fichiers XMP non copiés : %6$d
+Avertissements du moteur : %7$d</string>
+    <string name="folder_resume">Prochaine photo de cette analyse : %1$d. Si les fichiers de la carte ont changé, vérifie le numéro de départ avant de poursuivre.</string>
+    <string name="folder_not_remembered">Android ou le fournisseur n’a pas conservé l’accès. Tu pourras sélectionner ce dossier de nouveau.</string>
+    <string name="folder_import_error">L’import n’a pas pu se terminer. Vérifie la bibliothèque et l’espace libre avant de relancer. Le dossier source n’a pas été modifié.</string>
+</resources>

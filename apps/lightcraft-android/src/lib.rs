@@ -18,16 +18,22 @@ thread_local! {
     static LAB: RefCell<Option<Lab>> = const { RefCell::new(None) };
 }
 
+mod batch_export;
 mod canvas_tools;
+mod culling_tools;
 mod denoise_tools;
 mod develop_tools;
 mod export_tools;
+mod folder_import;
 mod library_tools;
 mod looks;
+mod merge_tools;
+mod print_tools;
 
 struct Lab {
     root: PathBuf,
     session: Session,
+    mobile_merge: merge_tools::MergeState,
 }
 
 type Reply<T> = Result<T, &'static str>;
@@ -43,7 +49,7 @@ impl Lab {
         lightcraft_engine::gpu::set_enabled(false);
         session.media.set_budget(192 * 1024 * 1024);
         session.open_library(root.join("Library"), false).map_err(|_| "library")?;
-        let mut lab = Self { root, session };
+        let mut lab = Self { root, session, mobile_merge: Default::default() };
         let _ = lab.setup_mobile_denoise();
         Ok(lab)
     }
@@ -151,6 +157,11 @@ impl Lab {
         match op {
             "list" => Ok(bytes_json(self.mobile_library_page(p))),
             "export_configured" => export_tools::run(self, p),
+            "export_original_pair" => batch_export::original_pair(self, p),
+            "print_render" => self.mobile_print(p).map(bytes_json),
+            o if o.starts_with("folder.") => self.folder_import_action(o, p),
+            o if o.starts_with("merge_") => self.mobile_merge(o, p).map(bytes_json),
+            o if o.starts_with("cull_") => self.mobile_culling(o, p).map(bytes_json),
             o if o.starts_with("looks.") => self.looks_action(o, p),
             o if o.starts_with("library_") => self.mobile_library(o, p).map(bytes_json),
             o if o.starts_with("noise_") => self.mobile_denoise(o, p).map(bytes_json),

@@ -61,7 +61,7 @@ import org.json.JSONObject;
 
 /** Android owns all presentation, navigation, pickers and error messages. */
 public class MainActivity extends Activity {
-    private static final int IMPORT = 101, SAVE = 102;
+    private static final int IMPORT = 101, SAVE = 102, SAVE_BATCH = 111;
     private static final int BASE = 0xff111721, TILE = 0xff202a38, DARK = 0xff090e16,
         TEXT = 0xfff5f7fa, SUB = 0xffb6c1cf, GOLD = 0xffe8ae68, WARN = 0xffffbeae;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -81,6 +81,12 @@ public class MainActivity extends Activity {
     private MobileDevelopTools developTools;
     private MobileLibraryTools libraryTools;
     private MobileLooks looks;
+    private MobileFolderImport folders;
+    private MobileCullingTools culling;
+    private MobileMerge merge;
+    private MobilePrint print;
+    private MobileBatchExport.Request pendingBatch;
+    private boolean batching;
     private final Map<Long, JSONObject> libraryRows = new HashMap<>();
     private LinearLayout editorPanel;
     private JSONArray controlSchema = new JSONArray();
@@ -139,7 +145,20 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         prefs = getSharedPreferences("mobile", MODE_PRIVATE);
         developTools = new MobileDevelopTools(this);
-        libraryTools = new MobileLibraryTools(this, this::catalogueRequest, this::refreshCatalogue);
+        libraryTools = new MobileLibraryTools(this,this::catalogueRequest,this::refreshCatalogue,this::showWorkflow);
+        culling = new MobileCullingTools(this,this::catalogueRequest,(id,edge,ok,failed) ->
+            work(0,() -> decode(engine.request("render",args("id",id,"edge",edge,"quality",77))),ok,e -> failed.run()),this::refreshCatalogue);
+        merge = new MobileMerge(this,(op,params,ok,failed) -> work(0,() -> req(op,params),ok,failed),this::refreshCatalogue);
+        folders = new MobileFolderImport(this,new MobileFolderImport.Host() {
+            public void task(Callable<JSONObject> task,Consumer<JSONObject> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
+            public JSONObject request(String op,JSONObject params) throws Exception { return req(op,params); }
+            public void imported() { refreshCatalogue(); }
+        });
+        print = new MobilePrint(this,new MobilePrint.Host() {
+            public JSONObject request(String op,JSONObject params) throws Exception { return req(op,params); }
+            public <T> void task(Callable<T> task,Consumer<T> ok,Consumer<Throwable> failed) { work(0,task,ok,failed); }
+            public void feedback(String text,boolean error) { MainActivity.this.feedback(text,error); }
+        });
         looks = new MobileLooks(this, new MobileLooks.Host() {
             public void call(String op, JSONObject a, Consumer<JSONObject> accepted) {
                 work(0, () -> req(op,a), result -> {
@@ -158,6 +177,8 @@ public class MainActivity extends Activity {
         });
         if (saved != null) {
             libraryTools.restore(saved);
+            print.restoreState(saved);
+            pendingBatch=MobileBatchExport.Request.restore(saved.getString("batch_picker"));
             query = saved.getString("query", "");
             memoryGridRow = saved.getInt("grid");
             section = saved.getString("tool", "light");
@@ -183,7 +204,8 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onSaveInstanceState(Bundle b) {
-        libraryTools.save(b);
+        libraryTools.save(b); print.saveState(b);
+        if (pendingBatch!=null) b.putString("batch_picker",pendingBatch.serialize());
         b.putString("screen", screen); b.putString("return", returnFromSettings);
         b.putString("query", query); b.putInt("grid", grid == null ? memoryGridRow : grid.getFirstVisiblePosition());
         b.putString("tool", section); b.putString("export", pendingExport);
@@ -199,6 +221,9 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         // A pending edit belongs to the photo even if the Activity is recreated by rotation.
         commitAdjustments();
+        if (folders!=null) folders.destroy();
+        if (culling!=null) culling.close();
+        if (merge!=null) merge.close();
         dead = true;
         ui.removeCallbacksAndMessages(null);
         super.onDestroy();
@@ -346,7 +371,7 @@ public class MainActivity extends Activity {
         more = button(R.string.more_photos, false, () -> loadLibrary(false));
         more.setVisibility(View.GONE);
         root.addView(more, lp(MATCH, WRAP));
-        Button add = primary(R.string.import_photos, this::pickImport);
+        Button add = primary(R.string.import_photos, this::chooseImport);
         add.setEnabled(!importing);
         root.addView(add, footer());
         if (memoryGridRow > 0 && memoryGridRow < photos.size()) grid.setSelection(memoryGridRow);
@@ -513,8 +538,10 @@ public class MainActivity extends Activity {
         addTool(titles, actions, R.string.mobile_looks, () -> { commitAdjustments(); looks.show(selected.id()); });
         addTool(titles, actions, R.string.mobile_masks, () -> canvasTool("mask"));
         addTool(titles, actions, R.string.mobile_remove, () -> canvasTool("remove"));
+        addTool(titles, actions, R.string.canvas_eyes, () -> canvasTool("eyes"));
         addTool(titles, actions, R.string.mobile_free_crop, () -> canvasTool("crop"));
         addTool(titles, actions, R.string.mobile_organize, () -> libraryTools.organize(selected.id()));
+        addTool(titles, actions, R.string.flow_workflow, () -> showWorkflow(new JSONArray().put(selected.id())));
         addTool(titles, actions, R.string.mobile_export_options, this::chooseExport);
         addTool(titles, actions, R.string.info, this::photoInfo);
         new AlertDialog.Builder(this).setTitle(R.string.mobile_more_tools).setItems(titles.toArray(new CharSequence[0]),
@@ -845,6 +872,60 @@ public class MainActivity extends Activity {
         }, e -> { if (ticket == listTicket && "library".equals(screen)) { listLoading=false; problem(e); } });
     }
 
+    private void chooseImport() {
+        if (!ready || importing) return;
+        CharSequence[] options={getText(R.string.flow_one_or_more),getText(R.string.flow_folder_or_card)};
+        new AlertDialog.Builder(this).setTitle(R.string.flow_collection_import).setItems(options,(d,index)->{
+            if(index==0) pickImport(); else folders.show();
+        }).setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private void showWorkflow(JSONArray ids) {
+        if (ids.length()==0) return;
+        commitAdjustments();
+        long[] selectedIds=new long[ids.length()];
+        for(int i=0;i<ids.length();i++) selectedIds[i]=ids.optLong(i,-1);
+        int[] labels=ids.length()>1?new int[]{R.string.flow_workflows,R.string.flow_batch,R.string.flow_print,R.string.merge_title}
+            :new int[]{R.string.flow_workflows,R.string.flow_batch,R.string.flow_print};
+        CharSequence[] titles=new CharSequence[labels.length];
+        for(int i=0;i<labels.length;i++) titles[i]=getText(labels[i]);
+        new AlertDialog.Builder(this).setTitle(R.string.flow_workflow).setItems(titles,(d,n)->{
+            if(n==0) culling.open(ids);
+            if(n==1) chooseBatch(ids);
+            if(n==2) print.show(selectedIds);
+            if(n==3) merge.show(ids);
+        }).setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private void chooseBatch(JSONArray ids) {
+        if (batching || pendingBatch!=null) return;
+        catalogueRequest("cull_info",args("ids",ids),result -> {
+            JSONArray data=result.optJSONArray("photos");
+            if (data==null) return;
+            ArrayList<MobileBatchExport.Item> items=new ArrayList<>();
+            for(int n=0;n<data.length();n++) {
+                JSONObject photo=data.optJSONObject(n);
+                if(photo!=null) items.add(new MobileBatchExport.Item(photo.optLong("id"),photo.optString("name")));
+            }
+            MobileBatchExport.show(this,items,preferredEdge(),prefs.getInt("quality",90),request -> {
+                pendingBatch=request;
+                try { startActivityForResult(request.folderIntent(),SAVE_BATCH); }
+                catch(RuntimeException failure) { pendingBatch=null; problem(failure); }
+            });
+        });
+    }
+
+    private void useBatchFolder(Uri folder) {
+        MobileBatchExport.Request request=pendingBatch; pendingBatch=null;
+        if(request==null || folder==null || batching) return;
+        batching=true; stage(R.string.rendering);
+        work(0,() -> MobileBatchExport.run(this,engine,request,folder,progress -> ui.post(() -> {
+            if(!dead && batching) feedback(MobileBatchExport.progressText(this,progress),false);
+        })),report -> {
+            batching=false; clearStatus(); MobileBatchExport.showResult(this,report);
+        },failure -> { batching=false;problem(failure); });
+    }
+
     private void pickImport() {
         if (!ready || importing) return;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -858,6 +939,11 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (print.onActivityResult(request,result,data)) return;
+        if (request == MobileFolderImport.REQUEST_TREE) { folders.onTreeResult(result,data);return; }
+        if (request == SAVE_BATCH) {
+            useBatchFolder(result==RESULT_OK && data!=null?data.getData():null);return;
+        }
         if (request == MobileLooks.REQUEST_IMPORT) { looks.onImportResult(result,data); return; }
         if (request == SAVE) {
             finishExport(result == RESULT_OK && data != null ? data.getData() : null);
@@ -1036,10 +1122,12 @@ public class MainActivity extends Activity {
             LinearLayout tile = reuse instanceof LinearLayout ? (LinearLayout) reuse : newTile();
             Photo photo=getItem(p); tile.setTag(photo.id());
             JSONObject row = libraryRows.get(photo.id());
-            String badge = row==null ? "" : MobileLibraryTools.badge(row);
+            String badge = row==null ? "" : String.join(" · ", java.util.stream.Stream.of(MobileLibraryTools.badge(row),culling.badge(row))
+                .filter(value->!value.isEmpty()).toArray(String[]::new));
+            String display = row==null ? photo.name() : MobileCullingTools.displayName(row);
             int tint = row==null ? 0 : MobileLibraryTools.tint(row);
             TextView name = (TextView)tile.getChildAt(1);
-            name.setText(badge.isEmpty() ? photo.name() : badge + " · " + photo.name());
+            name.setText(badge.isEmpty() ? display : badge + " · " + display);
             name.setTextColor(tint == 0 ? TEXT : tint);
             boolean chosen = libraryTools.isSelected(photo.id());
             tile.setActivated(chosen);

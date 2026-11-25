@@ -54,10 +54,12 @@ final class MobileLibraryTools {
     private int minimum;
     private boolean favorites;
 
-    MobileLibraryTools(Activity context, Request request, Runnable refresh) {
+    private final Consumer<JSONArray> workflows;
+    MobileLibraryTools(Activity context, Request request, Runnable refresh, Consumer<JSONArray> workflows) {
         this.context = context;
         this.request = request;
         this.refresh = refresh;
+        this.workflows=workflows;
     }
 
     void save(Bundle state) {
@@ -216,10 +218,12 @@ final class MobileLibraryTools {
             text(R.string.ct_metadata)
         };
         int count=ids.length()==1?options.length:options.length-1;
-        String[] visible=new String[count];System.arraycopy(options,0,visible,0,count);
+        String[] visible=new String[count+1];System.arraycopy(options,0,visible,0,count);
+        visible[count]=text(R.string.flow_workflow);
         new AlertDialog.Builder(context)
             .setTitle(context.getString(R.string.ct_organize_count,ids.length()))
             .setItems(visible,(d,choice)->{
+                if(choice==count){ workflows.accept(ids); return; }
                 switch(choice){
                     case 0 -> choose(R.string.ct_rate,ratings(),rating,x->apply("library_rate",obj("ids",ids,"rating",x)));
                     case 1 -> choose(R.string.ct_flags,flagLabels(),flagIndex,x->apply("library_flag",obj("ids",ids,"flag",FLAGS[x])));

@@ -17,16 +17,18 @@ and confirmations use Android screens. English and French are available from Set
 | Desktop workflow | Android path |
 | --- | --- |
 | Develop adjustments | Auto, white-balance presets and a point sampler, light, RGB point and parametric curves, color mixer and black-and-white mixer, color grading, point colors, texture/clarity/dehaze, vignette, grain, detail and calibration. Numeric controls use the same engine ranges and defaults. |
-| Local edits and framing | Touch crop and straighten, radial/linear/brush/luminance masks and their local settings, removal/healing, and the same render engine for previews and exports. |
+| Local edits and framing | Touch crop and straighten, radial/linear/brush/luminance masks, offline Subject/Sky estimates, combined components, red/pet-eye correction and removal/healing, and the same render engine for previews and exports. |
 | Optics and geometry | Manual optical correction, chromatic aberration removal, profile corrections when usable lens data is built into the photo, manual, automatic and guided perspective. Lens Blur uses the desktop engine’s subject/shape-based focus with brush refinements. |
 | Detail and HDR | Classical luminance and color noise reduction; on-device RAW Denoise using the built-in CPU model for compatible sensor RAWs. HDR controls and compatible HDR export formats; Android displays the SDR preview. |
 | Looks and versions | Built-in profiles and presets, asset import via Files (.xmp, .lrtemplate, .lcpreset, .lceffect, .cube, .dcp), copy/paste selected families of adjustments, history and named versions. |
-| Catalogue | Multi-select ratings, flags, color labels, favorites, keywords, IPTC/GPS fields, albums and folders, browsing existing smart albums, and sorting/filtering. |
-| File output | Quick JPEG or advanced JPEG, PNG, TIFF, PSD, WebP, AVIF, JPEG XL and linear DNG. Resize, quality, bit depth, color space and metadata options depend on format. Exports create a separate file using the system picker; original files are not overwritten. Providers that cannot prove a new empty document are refused. |
+| Catalogue | Multi-select ratings, flags, color labels, favorites, keywords, IPTC/GPS fields, albums and folders, browsing existing smart albums, and sorting/filtering. Compare, Survey, stacks and virtual copies are in Photo workflows. |
+| File output | Quick JPEG or advanced JPEG, PNG, TIFF, PSD, WebP, AVIF, JPEG XL and linear DNG. Resize, quality, bit depth, color space and metadata options depend on format. Exports create a separate file using the system picker; original files are not overwritten. Providers that cannot prove a new empty document are refused. Batch output and Original+XMP use an explicitly selected folder. |
+| Import, merge and layout | Import files or a folder/SD card through Files, photo merge to a new HDR/panorama DNG, and print-format single-image layouts or contact sheets saved as PDF. |
 
-Not identical to desktop yet: no external AI models/downloaders, SAM subject/object masks, AI people
-search, camera tethering, video projects, desktop print/slideshow workspace, HDR/panorama merge,
-advanced smart-album rule authoring, file-sidecar writing, or Lightroom catalogue migration.
+See [the Android parity matrix](PARITY.md) for limits and what is still missing compared with
+LightCraft desktop, including smart-album authoring, people tools, SAM models, the slideshow
+workspace, and automatic sidecar writing. Video editing and a Book workspace are not available in
+upstream LightCraft either.
 The app has no network or broad storage permission. Imports are app-owned copies. Uninstalling or
 clearing its data removes the app's private library, not separately saved exports or originals.
 
