@@ -1,0 +1,18 @@
+<resources>
+    <string name="mobile_denoise_title">Débruitage RAW</string>
+    <string name="mobile_denoise_wait">Vérification de la photo…</string>
+    <string name="mobile_denoise_intro">Réduis le bruit du capteur directement sur ton téléphone, sans connexion. La préparation peut prendre quelques minutes et ne modifie pas l’original.</string>
+    <string name="mobile_denoise_strength">Intensité du débruitage</string>
+    <string name="mobile_denoise_amount">Intensité : %1$d%%</string>
+    <string name="mobile_denoise_prepare">Préparer</string>
+    <string name="mobile_denoise_apply">Appliquer</string>
+    <string name="mobile_denoise_off">Désactiver</string>
+    <string name="mobile_denoise_close">Fermer</string>
+    <string name="mobile_denoise_ready">Aperçu prêt. Choisis l’intensité et applique-la à la photo.</string>
+    <string name="mobile_denoise_busy">Préparation sur le processeur du téléphone…</string>
+    <string name="mobile_denoise_progress">Débruitage : %1$d sections sur %2$d</string>
+    <string name="mobile_denoise_not_raw">Il faut un RAW Bayer dont les données capteur peuvent être lues. Pour les autres photos, utilise la réduction du bruit de luminance et de couleur dans Détail.</string>
+    <string name="mobile_denoise_too_big">Ce RAW dépasse la limite mobile de 65 mégapixels.</string>
+    <string name="mobile_denoise_memory">Mémoire insuffisante. Ferme quelques applications ou réessaie plus tard.</string>
+    <string name="mobile_denoise_error">Impossible de débruiter cette photo. Vérifie l’espace de stockage disponible puis réessaie.</string>
+</resources>

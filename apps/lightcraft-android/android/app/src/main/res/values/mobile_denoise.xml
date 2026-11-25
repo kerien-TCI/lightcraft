@@ -1,0 +1,18 @@
+<resources>
+    <string name="mobile_denoise_title">RAW Denoise</string>
+    <string name="mobile_denoise_wait">Checking the photo…</string>
+    <string name="mobile_denoise_intro">Reduce sensor noise using your phone. This works offline. Preparing the preview can take a few minutes and keeps the original untouched.</string>
+    <string name="mobile_denoise_strength">Denoise strength</string>
+    <string name="mobile_denoise_amount">Strength: %1$d%%</string>
+    <string name="mobile_denoise_prepare">Prepare</string>
+    <string name="mobile_denoise_apply">Apply</string>
+    <string name="mobile_denoise_off">Turn off</string>
+    <string name="mobile_denoise_close">Close</string>
+    <string name="mobile_denoise_ready">Preview ready. Choose a strength and apply it to the photo.</string>
+    <string name="mobile_denoise_busy">Preparing with the built-in CPU denoiser…</string>
+    <string name="mobile_denoise_progress">Denoising: %1$d of %2$d tiles</string>
+    <string name="mobile_denoise_not_raw">This tool requires a Bayer RAW whose sensor data can be decoded. For other photos, use the luminance and color noise controls in Detail.</string>
+    <string name="mobile_denoise_too_big">This RAW exceeds the 65-megapixel mobile denoise limit.</string>
+    <string name="mobile_denoise_memory">Not enough memory right now. Close some apps or try again later.</string>
+    <string name="mobile_denoise_error">Could not denoise this photo. Check the remaining space on your device and try again.</string>
+</resources>

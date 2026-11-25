@@ -1,0 +1,33 @@
+<resources>
+    <string name="mobile_tools">Outils</string>
+    <string name="mobile_more_tools">Outils de retouche</string>
+    <string name="mobile_basic_tools">Réglages de base</string>
+    <string name="mobile_automatic">Réglages automatiques</string>
+    <string name="mobile_point_curves">Modifier les courbes de points RVB</string>
+    <string name="mobile_masks">Masquage</string>
+    <string name="mobile_remove">Suppression et correction</string>
+    <string name="mobile_free_crop">Recadrage libre au toucher</string>
+    <string name="mobile_looks">Paramètres prédéfinis, profils et versions</string>
+    <string name="mobile_reset_group">Réinitialiser ce panneau</string>
+    <string name="mobile_group_enabled">Activer cette section</string>
+    <string name="mobile_upright">Correction de perspective</string>
+    <string name="mobile_ca">Supprimer les aberrations chromatiques</string>
+    <string name="mobile_embedded_lens">Activer le profil optique disponible</string>
+    <string name="mobile_no_lens">Aucune correction intégrée ni aucun profil correspondant. Les corrections manuelles restent disponibles.</string>
+    <string name="mobile_constrain_crop">Contraindre le recadrage</string>
+    <string name="mobile_bw">Noir et blanc</string>
+    <string name="mobile_auto_bw">Mélange noir et blanc automatique</string>
+    <string name="mobile_hot_pixels">Supprimer les pixels chauds (RAW)</string>
+    <string name="mobile_hdr_enable">Activer le traitement HDR</string>
+    <string name="mobile_hdr_preview">L’aperçu du téléphone reste SDR. Ces réglages agissent sur la marge HDR et le rendu SDR.</string>
+    <string name="mobile_blur_enable">Activer le flou de l’objectif</string>
+    <string name="mobile_blur_shape">Forme de la zone nette</string>
+    <string name="mobile_wb">Préréglage de balance des blancs</string>
+    <string name="mobile_wb_pick">Échantillonner un point neutre</string>
+    <string name="mobile_color_pick">Échantillonner une couleur</string>
+    <string name="mobile_color_delete">Supprimer un échantillon de couleur</string>
+    <string name="mobile_sample_tip">Touche la photo pour choisir un point.</string>
+    <string name="mobile_preview_wait">Attends le chargement de la photo et de ses outils.</string>
+    <string name="mobile_organize">Classer la photo</string>
+    <string name="mobile_export_options">Options d’exportation</string>
+</resources>

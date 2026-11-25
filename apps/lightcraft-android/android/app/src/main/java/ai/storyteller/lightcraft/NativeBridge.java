@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/** Mobile API; this deliberately exposes no desktop commands, user paths, or automation socket. */
+/** Mobile API; this exposes scoped tool operations, not the generic desktop command channel or an automation socket. */
 final class NativeBridge implements LabEngine {
     static {
         System.loadLibrary("main");

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="look_tools">Styles et historique</string>
+    <string name="look_presets">Paramètres prédéfinis</string>
+    <string name="look_profiles">Profils</string>
+    <string name="look_history">Historique des retouches</string>
+    <string name="look_versions">Versions enregistrées</string>
+    <string name="look_copy">Copier les réglages</string>
+    <string name="look_paste">Coller les réglages copiés</string>
+    <string name="look_paste_previous">Appliquer les réglages de la photo précédente</string>
+    <string name="look_import">Importer un paramètre prédéfini ou un profil</string>
+    <string name="look_create_preset">Créer un paramètre prédéfini</string>
+    <string name="look_preset_created">Paramètre prédéfini enregistré.</string>
+    <string name="look_apply">Appliquer</string>
+    <string name="look_apply_amount">Appliquer avec une autre intensité</string>
+    <string name="look_favorite">Ajouter aux favoris</string>
+    <string name="look_unfavorite">Retirer des favoris</string>
+    <string name="look_amount">Intensité</string>
+    <string name="look_percent">%1$d %%</string>
+    <string name="look_applied">Réglages appliqués.</string>
+    <string name="look_copied">Réglages copiés dans Photo Lab.</string>
+    <string name="look_no_history">Cette photo ne contient pas encore de retouches.</string>
+    <string name="look_baseline">Avant la première retouche</string>
+    <string name="look_create_version">Enregistrer la version actuelle</string>
+    <string name="look_version_created">Version enregistrée.</string>
+    <string name="look_restore_version">Restaurer cette version</string>
+    <string name="look_rename_version">Renommer cette version</string>
+    <string name="look_update_version">Remplacer par les retouches actuelles</string>
+    <string name="look_replace_version">Remplacer les réglages de cette version enregistrée par les retouches actuelles ?</string>
+    <string name="look_name">Nom</string>
+    <string name="look_name_required">Saisis un nom</string>
+    <string name="look_choose_groups">Quels réglages ?</string>
+    <string name="look_pick_group">Sélectionne au moins un groupe.</string>
+    <string name="look_group_profile">Profil</string>
+    <string name="look_group_treatment">Couleur ou noir et blanc</string>
+    <string name="look_group_wb">Balance des blancs</string>
+    <string name="look_group_light">Lumière</string>
+    <string name="look_group_curve">Courbe des tonalités</string>
+    <string name="look_group_color">Couleur</string>
+    <string name="look_group_mixer">Mélangeur de couleurs</string>
+    <string name="look_group_grading">Virage colorimétrique</string>
+    <string name="look_group_effects">Effets</string>
+    <string name="look_group_vignette">Vignettage</string>
+    <string name="look_group_grain">Grain</string>
+    <string name="look_group_detail">Détail</string>
+    <string name="look_group_optics">Optique</string>
+    <string name="look_group_geometry">Géométrie</string>
+    <string name="look_group_crop">Recadrage</string>
+    <string name="look_group_masks">Masques</string>
+    <string name="look_group_spots">Correction des défauts</string>
+    <string name="look_group_redeye">Correction des yeux rouges</string>
+    <string name="look_group_blur">Flou de l’objectif</string>
+    <string name="look_group_calibration">Étalonnage</string>
+    <string name="look_import_info">Choisis un fichier .xmp, .lrtemplate, .lcpreset, .lceffect, .cube ou .dcp (16 Mo maximum). Le document d’origine reste inchangé.</string>
+    <string name="look_choose_file">Choisir un fichier</string>
+    <string name="look_import_result">Profils ou paramètres ajoutés : %1$d
+Effets de masque ajoutés : %2$d
+Doublons ignorés : %3$d
+Fichiers ou éléments non importés : %4$d</string>
+    <string name="look_error_import">Impossible d’importer ce paramètre ou profil. Vérifie son format et sa taille.</string>
+    <string name="look_error_invalid">Impossible d’appliquer cette action de style ou d’historique à la photo actuelle.</string>
+    <string name="look_error_clipboard">Copie d’abord les réglages depuis une photo.</string>
+</resources>

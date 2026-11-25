@@ -18,21 +18,12 @@ thread_local! {
     static LAB: RefCell<Option<Lab>> = const { RefCell::new(None) };
 }
 
-const ADJUSTMENTS: &[&str] = &[
-    "light.exposure",
-    "light.contrast",
-    "light.highlights",
-    "light.shadows",
-    "light.whites",
-    "light.blacks",
-    "color.vibrance",
-    "color.saturation",
-    "effects.clarity",
-    "effects.dehaze",
-    "wb.temp",
-    "wb.tint",
-    "detail.sharpenAmount",
-];
+mod canvas_tools;
+mod denoise_tools;
+mod develop_tools;
+mod export_tools;
+mod library_tools;
+mod looks;
 
 struct Lab {
     root: PathBuf,
@@ -52,25 +43,14 @@ impl Lab {
         lightcraft_engine::gpu::set_enabled(false);
         session.media.set_budget(192 * 1024 * 1024);
         session.open_library(root.join("Library"), false).map_err(|_| "library")?;
-        Ok(Self { root, session })
+        let mut lab = Self { root, session };
+        let _ = lab.setup_mobile_denoise();
+        Ok(lab)
     }
 
+    #[cfg(test)]
     fn list(&self, p: &Value) -> Value {
-        let start = p["start"].as_u64().unwrap_or(0).min(1_000_000) as usize;
-        let needle = p["query"].as_str().unwrap_or_default().trim().to_lowercase();
-        let all =
-            self.session.catalog.photos().filter(|x| {
-                !x.deleted && !x.local && x.kind != MediaKind::Video && (needle.is_empty() || x.file_name.to_lowercase().contains(&needle))
-            });
-        let mut items = Vec::new();
-        let mut total = 0;
-        for p in all {
-            if total >= start && items.len() < 120 {
-                items.push(json!({"id": p.id.0, "name": p.file_name, "width": p.width, "height": p.height, "format": p.format}));
-            }
-            total += 1;
-        }
-        json!({"items":items,"total":total})
+        self.mobile_library_page(p)
     }
 
     fn valid_photo(&self, p: &Value) -> Reply<PhotoId> {
@@ -96,8 +76,13 @@ impl Lab {
 
     fn settings(&self, id: PhotoId) -> Reply<Value> {
         let edits = self.session.develop_of(id).ok_or("selection")?;
-        let mut values: serde_json::Map<String, Value> =
-            ADJUSTMENTS.iter().filter_map(|&key| controls::get(&edits, key).map(|v| (key.to_owned(), json!(v)))).collect();
+        let mut values: serde_json::Map<String, Value> = controls::CONTROLS
+            .iter()
+            .map(|s| s.id.to_owned())
+            .chain(controls::indexed_instances(&edits).into_iter().map(|(id, _)| id))
+            .filter_map(|key| controls::get(&edits, &key).map(|value| (key, json!(value))))
+            .collect();
+        values.insert("advanced".into(), self.advanced_values(id, &edits));
         let photo = self.session.catalog.photo(id).ok_or("selection")?;
         values.insert("canUndo".into(), json!(photo.history_index().is_some_and(|i| i > 0)));
         values.insert("canRedo".into(), json!(photo.history_index().is_some_and(|i| i + 1 < photo.history.len())));
@@ -154,10 +139,33 @@ impl Lab {
     }
 
     fn action(&mut self, op: &str, p: &Value) -> Reply<Vec<u8>> {
+        if canvas_tools::handles(op) {
+            let id = self.valid_photo(p)?;
+            if canvas_tools::mutates(op) {
+                self.select(id)?;
+                self.ensure_history_baseline(id)?;
+            }
+            let response = canvas_tools::run(&mut self.session, id, op, p)?;
+            return if canvas_tools::mutates(op) { self.settings(id).map(bytes_json) } else { Ok(response) };
+        }
         match op {
-            "list" => Ok(bytes_json(self.list(p))),
+            "list" => Ok(bytes_json(self.mobile_library_page(p))),
+            "export_configured" => export_tools::run(self, p),
+            o if o.starts_with("looks.") => self.looks_action(o, p),
+            o if o.starts_with("library_") => self.mobile_library(o, p).map(bytes_json),
+            o if o.starts_with("noise_") => self.mobile_denoise(o, p).map(bytes_json),
             "import" => self.import(p).map(bytes_json),
             "metadata" => self.valid_photo(p).and_then(|id| self.settings(id)).map(bytes_json),
+            "controls" => {
+                let id = self.valid_photo(p)?;
+                self.mobile_controls(id).map(bytes_json)
+            }
+            "advanced" => {
+                let id = self.valid_photo(p)?;
+                self.select(id)?;
+                self.ensure_history_baseline(id)?;
+                self.advanced_edit(id, p).map(bytes_json)
+            }
             "render" => self.valid_photo(p).and_then(|id| self.render(id, p)),
             "before" => self.valid_photo(p).and_then(|id| self.render_before(id, p)),
             "export" => {
@@ -181,11 +189,13 @@ impl Lab {
                 }
                 match op {
                     "adjust_many" => {
-                        let supplied = p["values"].as_object().ok_or("edit")?;
+                        let supplied = p["values"].as_object().filter(|o| o.len() <= 128).ok_or("edit")?;
+                        let settings = self.session.develop_of(id).ok_or("selection")?;
                         let values = supplied
                             .iter()
                             .filter_map(|(k, v)| {
-                                (ADJUSTMENTS.contains(&k.as_str()) && v.as_f64().is_some_and(f64::is_finite)).then_some((k.clone(), v.clone()))
+                                (develop_tools::slider_allowed(k, &settings) && v.as_f64().is_some_and(f64::is_finite))
+                                    .then_some((k.clone(), v.clone()))
                             })
                             .collect::<serde_json::Map<String, Value>>();
                         if values.is_empty() || values.len() != supplied.len() {
@@ -278,10 +288,10 @@ mod tests {
         );
         assert_eq!(lab.import(&json!({"paths":[original]})), Err("import"));
         assert_eq!(lab.import(&json!({"paths":[local]})).unwrap()["imported"], 1);
-        let row = lab.list(&json!({"query":"FIXTURE"}));
+        let row = lab.mobile_library_page(&json!({"query":"FIXTURE"}));
         let id = row["items"][0]["id"].as_u64().unwrap();
         assert_eq!(row["total"], 1);
-        assert_eq!(lab.list(&json!({"query":"none"}))["total"], 0);
+        assert_eq!(lab.mobile_library_page(&json!({"query":"none"}))["total"], 0);
         let before = lab.action("render", &json!({"id":id,"edge":320})).unwrap();
         let edits = json!({"id":id,"values":{"light.exposure":1.5,"color.saturation":10}});
         lab.action("adjust_many", &edits).unwrap();

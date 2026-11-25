@@ -36,12 +36,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.window.OnBackInvokedDispatcher;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -77,6 +76,14 @@ public class MainActivity extends Activity {
     private final ArrayList<Photo> photos = new ArrayList<>();
     private final HashSet<Long> thumbRequests = new HashSet<>(), failedThumbs = new HashSet<>();
     private final Map<String, SeekBar> sliders = new HashMap<>();
+    private final Map<String, Consumer<JSONObject>> toggles = new HashMap<>();
+    private final Map<String, MobileDevelopTools.Slider> sliderSpecs = new HashMap<>();
+    private MobileDevelopTools developTools;
+    private MobileLibraryTools libraryTools;
+    private MobileLooks looks;
+    private final Map<Long, JSONObject> libraryRows = new HashMap<>();
+    private LinearLayout editorPanel;
+    private JSONArray controlSchema = new JSONArray();
     private final Map<String, Double> pendingEdits = new HashMap<>();
     private volatile boolean dead;
     private LabEngine engine;
@@ -106,22 +113,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    record Control(String key, int label, double min, double step, int steps) {}
-    private static final Control[] LIGHT = {
-        new Control("light.exposure", R.string.exposure, -5, .05, 200), integer("light.contrast", R.string.contrast),
-        integer("light.highlights", R.string.highlights), integer("light.shadows", R.string.shadows),
-        integer("light.whites", R.string.whites), integer("light.blacks", R.string.blacks),
-    };
-    private static final Control[] COLOR = {
-        integer("color.vibrance", R.string.vibrance), integer("color.saturation", R.string.saturation),
-        new Control("wb.temp", R.string.temperature, 2000, 50, 760), integer("wb.tint", R.string.tint),
-    };
-    private static final Control[] DETAIL = {
-        integer("effects.clarity", R.string.clarity), integer("effects.dehaze", R.string.dehaze),
-        new Control("detail.sharpenAmount", R.string.sharpness, 0, 1, 150),
-    };
-    private static Control integer(String key, int label) { return new Control(key, label, -100, 1, 200); }
-
     private static final class Work implements Runnable, Comparable<Work> {
         private final int priority;
         private final long order = ORDER.getAndIncrement();
@@ -147,7 +138,26 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = getSharedPreferences("mobile", MODE_PRIVATE);
+        developTools = new MobileDevelopTools(this);
+        libraryTools = new MobileLibraryTools(this, this::catalogueRequest, this::refreshCatalogue);
+        looks = new MobileLooks(this, new MobileLooks.Host() {
+            public void call(String op, JSONObject a, Consumer<JSONObject> accepted) {
+                work(0, () -> req(op,a), result -> {
+                    long id = a.optLong("photo",-1);
+                    if (MobileLooks.affectsPreview(op)) {
+                        invalidateThumbnail(id);
+                        if (isEditing(id)) openPhoto();
+                    }
+                    accepted.accept(result);
+                }, MainActivity.this::problem);
+            }
+            public void task(Callable<JSONObject> worker, Consumer<JSONObject> accepted) {
+                work(0,worker,accepted,MainActivity.this::problem);
+            }
+            public JSONObject request(String op, JSONObject a) throws Exception { return req(op,a); }
+        });
         if (saved != null) {
+            libraryTools.restore(saved);
             query = saved.getString("query", "");
             memoryGridRow = saved.getInt("grid");
             section = saved.getString("tool", "light");
@@ -173,6 +183,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onSaveInstanceState(Bundle b) {
+        libraryTools.save(b);
         b.putString("screen", screen); b.putString("return", returnFromSettings);
         b.putString("query", query); b.putInt("grid", grid == null ? memoryGridRow : grid.getFirstVisiblePosition());
         b.putString("tool", section); b.putString("export", pendingExport);
@@ -204,6 +215,8 @@ public class MainActivity extends Activity {
             screen = "library";
             showScreen();
             if (ready) loadLibrary(true);
+        } else if (libraryTools.clearSelection()) {
+            if (adapter != null) adapter.notifyDataSetChanged();
         } else if (!query.isEmpty()) {
             query = ""; showScreen(); loadLibrary(true);
         } else {
@@ -215,7 +228,7 @@ public class MainActivity extends Activity {
         invalidateBefore();
         grid = null; adapter = null; more = null; preview = null; export = null;
         undo = null; redo = null; compare = null;
-        sliders.clear();
+        sliders.clear(); toggles.clear(); sliderSpecs.clear(); editorPanel = null;
         Configuration c = getResources().getConfiguration();
         sideBySide = c.screenWidthDp >= 600 || (c.screenWidthDp >= 475 && c.screenWidthDp > c.screenHeightDp);
         root = stack(BASE);
@@ -288,6 +301,7 @@ public class MainActivity extends Activity {
             @Override public void afterTextChanged(Editable e) {}
         });
 
+        root.addView(libraryTools.toolbar(),lp(MATCH,WRAP));
         FrameLayout content = new FrameLayout(this);
         root.addView(content, new LinearLayout.LayoutParams(MATCH, 0, 1));
         grid = new GridView(this);
@@ -300,12 +314,21 @@ public class MainActivity extends Activity {
         grid.setAdapter(adapter);
         grid.setOnItemClickListener((a, view, position, id) -> {
             if (position >= photos.size()) return;
+            if (libraryTools.toggleSelection(photos.get(position).id())) {
+                adapter.notifyDataSetChanged(); return;
+            }
             ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(root.getWindowToken(), 0);
             memoryGridRow = grid.getFirstVisiblePosition();
             selected = photos.get(position); currentPreview = null; photoUsable = false;
-            settings = new JSONObject(); section = "light"; screen = "editor";
+            settings = new JSONObject(); controlSchema = new JSONArray(); section = "light"; screen = "editor";
             showScreen();
             if (ready) openPhoto();
+        });
+        grid.setOnItemLongClickListener((a,view,position,id) -> {
+            if (position >= photos.size()) return false;
+            boolean consumed = libraryTools.longPress(photos.get(position).id());
+            if (consumed) adapter.notifyDataSetChanged();
+            return consumed;
         });
         content.addView(grid, new FrameLayout.LayoutParams(MATCH, MATCH));
         LinearLayout intro = stack(BASE);
@@ -354,13 +377,8 @@ public class MainActivity extends Activity {
         body.addView(tools, tall
             ? new LinearLayout.LayoutParams(MATCH, 0, 1.15f)
             : lp(dp(Math.max(198, Math.min(400, c.screenWidthDp * 39 / 100))), MATCH));
-        LinearLayout categories = row();
-        categories.setPadding(dp(8), 0, dp(8), 0);
-        tools.addView(categories, lp(MATCH, WRAP));
-        category(categories, "light", R.string.light, tools);
-        category(categories, "color", R.string.color, tools);
-        category(categories, "detail", R.string.detail, tools);
-        fillControls(tools);
+        editorPanel = tools;
+        fillEditorPanel();
 
         LinearLayout history = row();
         FrameLayout.LayoutParams overlay = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.START | Gravity.TOP);
@@ -379,7 +397,7 @@ public class MainActivity extends Activity {
         LinearLayout actions = row();
         actions.setPadding(dp(8), dp(2), dp(8), dp(2));
         actions.addView(button(R.string.crop, false, this::cropPhoto), new LinearLayout.LayoutParams(0, WRAP, 1));
-        actions.addView(button(R.string.info, false, this::photoInfo), new LinearLayout.LayoutParams(0, WRAP, 1));
+        actions.addView(button(R.string.mobile_tools, false, this::chooseTool), new LinearLayout.LayoutParams(0, WRAP, 1));
         export = primary(R.string.export, this::startExport);
         export.setEnabled(photoUsable && !exporting);
         actions.addView(export, new LinearLayout.LayoutParams(0, WRAP, 1.25f));
@@ -450,44 +468,248 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void category(LinearLayout categories, String key, int text, LinearLayout tools) {
-        Button tab = button(text, key.equals(section), () -> {
-            if (key.equals(section)) return;
-            commitAdjustments(); section = key;
-            for (int i=0; i<categories.getChildCount(); ++i) {
-                Button b = (Button) categories.getChildAt(i);
-                boolean chosen = key.equals(b.getTag());
-                b.setSelected(chosen); b.setBackground(shape(chosen ? GOLD : TILE, 12)); b.setTextColor(chosen ? DARK : TEXT);
-            }
-            fillControls(tools);
-        });
-        tab.setTag(key); tab.setSelected(key.equals(section));
-        categories.addView(tab, new LinearLayout.LayoutParams(0, WRAP, 1));
-    }
-
-    private void fillControls(LinearLayout tools) {
-        if (tools.getChildCount() > 1) tools.removeViewAt(1);
-        sliders.clear();
+    private void fillEditorPanel() {
+        if (editorPanel == null) return;
+        editorPanel.removeAllViews();
+        sliders.clear(); toggles.clear(); sliderSpecs.clear();
+        LinearLayout categories = row();
+        categories.setPadding(dp(8), 0, dp(8), 0);
+        editorPanel.addView(categories, lp(MATCH, WRAP));
+        if (MobileDevelopTools.quick(section)) {
+            category(categories, "light", R.string.light);
+            category(categories, "color", R.string.color);
+            category(categories, "effects", R.string.detail);
+        } else {
+            Button basic = button(R.string.back, false, () -> selectToolPanel("light"));
+            basic.setContentDescription(getString(R.string.mobile_basic_tools));
+            categories.addView(basic, lp(WRAP, WRAP));
+            TextView name = label(developTools.title(section), 15, TEXT, true);
+            name.setAccessibilityHeading(true);
+            name.setPadding(dp(8), 0, 0, 0);
+            categories.addView(name, new LinearLayout.LayoutParams(0, WRAP, 1));
+        }
         ScrollView scroll = scroll();
         LinearLayout content = stack(TILE);
         content.setPadding(dp(16), dp(2), dp(16), dp(12));
-        Control[] group = "color".equals(section) ? COLOR : "detail".equals(section) ? DETAIL : LIGHT;
-        for (Control key : group) addControl(content, key);
-        content.addView(button(R.string.reset, false, this::askReset), lp(MATCH, WRAP));
+        addExtraControls(content);
+        for (MobileDevelopTools.Slider spec : developTools.sliders(controlSchema, section)) addControl(content, spec);
+        if (MobileDevelopTools.quick(section)) content.addView(button(R.string.reset, false, this::askReset), lp(MATCH, WRAP));
+        else if (!"hdr".equals(section)) {
+            content.addView(button(R.string.mobile_reset_group, false, () -> advanced("reset_section", args("section", section))), lp(MATCH, WRAP));
+        }
         scroll.addView(content, lp(MATCH, WRAP));
-        tools.addView(scroll, new LinearLayout.LayoutParams(MATCH, 0, 1));
+        editorPanel.addView(scroll, new LinearLayout.LayoutParams(MATCH, 0, 1));
+        syncControls();
     }
 
-    private void addControl(LinearLayout pane, Control spec) {
+    private void chooseTool() {
+        if (!photoUsable || controlSchema.length() == 0) { feedback(getString(R.string.mobile_preview_wait),false); return; }
+        ArrayList<CharSequence> titles = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        for (MobileDevelopTools.Panel p : MobileDevelopTools.PANELS) {
+            titles.add(developTools.tr(p.label()));
+            actions.add(() -> selectToolPanel(p.id()));
+        }
+        addTool(titles, actions, R.string.mobile_looks, () -> { commitAdjustments(); looks.show(selected.id()); });
+        addTool(titles, actions, R.string.mobile_masks, () -> canvasTool("mask"));
+        addTool(titles, actions, R.string.mobile_remove, () -> canvasTool("remove"));
+        addTool(titles, actions, R.string.mobile_free_crop, () -> canvasTool("crop"));
+        addTool(titles, actions, R.string.mobile_organize, () -> libraryTools.organize(selected.id()));
+        addTool(titles, actions, R.string.mobile_export_options, this::chooseExport);
+        addTool(titles, actions, R.string.info, this::photoInfo);
+        new AlertDialog.Builder(this).setTitle(R.string.mobile_more_tools).setItems(titles.toArray(new CharSequence[0]),
+            (dialog, which) -> actions.get(which).run()).setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private void addTool(ArrayList<CharSequence> titles, ArrayList<Runnable> actions, int name, Runnable action) {
+        titles.add(getString(name)); actions.add(action);
+    }
+
+    private void selectToolPanel(String key) {
+        if (key.equals(section)) return;
+        commitAdjustments();
+        section = key;
+        fillEditorPanel();
+    }
+
+    private void category(LinearLayout categories, String key, int text) {
+        Button tab = button(text, key.equals(section), () -> selectToolPanel(key));
+        tab.setSelected(key.equals(section)); categories.addView(tab, new LinearLayout.LayoutParams(0, WRAP, 1));
+    }
+
+    private JSONObject advancedState() {
+        JSONObject state = settings.optJSONObject("advanced");
+        return state == null ? new JSONObject() : state;
+    }
+
+    private void advanced(String tool, JSONObject more) {
+        if (selected == null || !photoUsable) return;
+        try { more.put("id", selected.id()).put("tool", tool); }
+        catch (JSONException invalid) { problem(invalid); return; }
+        edit("advanced", more);
+    }
+
+    private void chooser(int name, String cmd, String[] keys, String[] labels, String chosen) {
+        CharSequence[] options = new CharSequence[labels.length];
+        int checked = -1;
+        for (int i=0; i<keys.length; i++) {
+            options[i] = developTools.tr(labels[i]);
+            if (keys[i].equals(chosen)) checked = i;
+        }
+        new AlertDialog.Builder(this).setTitle(name).setSingleChoiceItems(options, checked, (d, index) -> {
+            d.dismiss(); advanced(cmd, args("mode",keys[index]));
+        }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    private void panelButton(LinearLayout content, int name, Runnable run) {
+        content.addView(button(name, false, run), lp(MATCH, WRAP));
+    }
+
+    private void mobileSwitch(LinearLayout pane, int title, String state, String tool, String group) {
+        Switch control = new Switch(this);
+        control.setText(title); control.setTextColor(TEXT); control.setMinHeight(dp(48));
+        control.setPadding(0,dp(3),0,dp(3));
+        Consumer<JSONObject> update = current -> {
+            control.setEnabled(photoUsable);
+            JSONObject eyes = current.optJSONObject("eyes");
+            boolean value = group == null ? current.optBoolean(state) : eyes == null || eyes.optBoolean(group,true);
+            control.setOnCheckedChangeListener(null);
+            control.setChecked(value);
+            control.setOnCheckedChangeListener((b, on) -> advanced(tool,group==null ? args("enabled",on) : args("section",group,"enabled",on)));
+        };
+        toggles.put(group==null?state:"eyes:"+group, update);
+        update.accept(advancedState());
+        pane.addView(control, lp(MATCH, WRAP));
+    }
+
+    private void addExtraControls(LinearLayout pane) {
+        String eye = switch(section) {
+            case "curve" -> "light";
+            case "mixer","bwMix","grading","pointColor" -> "color";
+            case "vignette","grain" -> "effects";
+            case "light","color","detail","effects","optics","geometry","calibration","lensBlur" -> section;
+            default -> null;
+        };
+        if (eye != null && !MobileDevelopTools.quick(section)) mobileSwitch(pane,R.string.mobile_group_enabled,"","toggle",eye);
+        switch(section) {
+            case "curve" -> panelButton(pane,R.string.mobile_point_curves,() -> canvasTool("curve"));
+            case "light" -> panelButton(pane, R.string.mobile_automatic, () -> advanced("auto",new JSONObject()));
+            case "color" -> {
+                mobileSwitch(pane,R.string.mobile_bw,"bw","treatment",null);
+                panelButton(pane,R.string.mobile_wb, () -> chooser(R.string.mobile_wb,"wb",
+                    new String[]{"asShot","auto","daylight","cloudy","shade","tungsten","fluorescent","flash"},
+                    new String[]{"As Shot","Auto","Daylight","Cloudy","Shade","Tungsten","Fluorescent","Flash"},
+                    advancedState().optString("wbMode")));
+                panelButton(pane,R.string.mobile_wb_pick, () -> samplePoint("white_sample"));
+            }
+            case "bwMix" -> {
+                mobileSwitch(pane,R.string.mobile_bw,"bw","treatment",null);
+                panelButton(pane,R.string.mobile_auto_bw, () -> advanced("auto_bw",new JSONObject()));
+            }
+            case "pointColor" -> {
+                panelButton(pane,R.string.mobile_color_pick, () -> samplePoint("color_sample"));
+                panelButton(pane,R.string.mobile_color_delete, this::removeColorSample);
+            }
+            case "detail" -> {
+                panelButton(pane,R.string.mobile_denoise_title,this::showDenoise);
+                mobileSwitch(pane,R.string.mobile_hot_pixels,"hotPixels","hot_pixels",null);
+            }
+            case "optics" -> {
+                mobileSwitch(pane,R.string.mobile_ca,"removeCA","remove_ca",null);
+                if (advancedState().optBoolean("embeddedLens")) {
+                    mobileSwitch(pane,R.string.mobile_embedded_lens,"lensProfile","lens_profile",null);
+                } else pane.addView(label(getString(R.string.mobile_no_lens),13,SUB,false),lp(MATCH,WRAP));
+            }
+            case "geometry" -> {
+                panelButton(pane,R.string.canvas_guide,() -> canvasTool("guide"));
+                mobileSwitch(pane,R.string.mobile_constrain_crop,"constrainCrop","constrain",null);
+                panelButton(pane,R.string.mobile_upright, () -> chooser(R.string.mobile_upright,"perspective",
+                    new String[]{"off","auto","level","vertical","full"}, new String[]{"Off","Auto","Level","Vertical","Full"},
+                    advancedState().optString("upright")));
+            }
+            case "lensBlur" -> {
+                panelButton(pane,R.string.canvas_lens_brush,() -> canvasTool("lensBrush"));
+                mobileSwitch(pane,R.string.mobile_blur_enable,"blur","enable_blur",null);
+                panelButton(pane,R.string.mobile_blur_shape, () -> chooser(R.string.mobile_blur_shape,"blur_shape",
+                    new String[]{"auto","round","wide","tall"},new String[]{"Auto","Round","Wide","Tall"},advancedState().optString("shape")));
+            }
+            case "profile" -> panelButton(pane,R.string.mobile_looks,() -> { commitAdjustments(); looks.show(selected.id()); });
+            case "hdr" -> {
+                mobileSwitch(pane,R.string.mobile_hdr_enable,"hdr","hdr",null);
+                pane.addView(label(getString(R.string.mobile_hdr_preview),13,SUB,false),lp(MATCH,WRAP));
+            }
+        }
+    }
+
+    private void removeColorSample() {
+        int n = Math.min(8,advancedState().optInt("samples"));
+        if (n <= 0) return;
+        CharSequence[] labels = new CharSequence[n];
+        for (int i=0;i<n;i++) labels[i] = "#"+(i+1);
+        new AlertDialog.Builder(this).setTitle(R.string.mobile_color_delete).setItems(labels,(d,i)->
+            advanced("color_delete",args("index",i))).setNegativeButton(android.R.string.cancel,null).show();
+    }
+
+    private void canvasTool(String tool) {
+        if (!photoUsable || selected == null) return;
+        commitAdjustments();
+        long id = selected.id();
+        stage(R.string.opening);
+        work(0, () -> {
+            JSONObject info = req("canvas_info",args("id",id));
+            Bitmap image = "curve".equals(tool) ? null : decode(engine.request("canvas_source",args("id",id,"tool",tool)));
+            return new CanvasInput(info,image);
+        }, input -> {
+            if (!isEditing(id)) return;
+            clearStatus();
+            MobileCanvasTools.show(this,tool,input.image(),input.info(),(op,payload) -> {
+                try { payload.put("id",id); } catch (JSONException bad) { problem(bad);return; }
+                if (isEditing(id)) edit(op,payload);
+            });
+        }, error -> { if (isEditing(id)) problem(error); });
+    }
+
+    private record CanvasInput(JSONObject info, Bitmap image) {}
+
+    private void showDenoise() {
+        if (!photoUsable || selected==null) return;
+        commitAdjustments();
+        long id=selected.id();
+        MobileDenoise.show(this,id,(op,a,ok,failed) -> work(0,() -> req(op,a),ok,failed),() -> {
+            invalidateThumbnail(id); if (isEditing(id)) openPhoto();
+        });
+    }
+
+    private void catalogueRequest(String op, JSONObject input, Consumer<JSONObject> done) {
+        work(0,() -> req(op,input),done,this::problem);
+    }
+
+    private void refreshCatalogue() {
+        if (!"library".equals(screen)) return;
+        if (adapter != null) adapter.notifyDataSetChanged();
+        if (ready) loadLibrary(true);
+    }
+
+    private void samplePoint(String tool) {
+        if (!photoUsable || selected == null) return;
+        long id = selected.id();
+        stage(R.string.opening);
+        work(0, () -> decode(engine.request("canvas_source",args("id",id))), img -> {
+            if (!isEditing(id)) return;
+            clearStatus();
+            MobilePhotoSampler.show(this,img,(x,y) -> advanced(tool,args("x",x,"y",y)));
+        }, e -> { if (isEditing(id)) problem(e); });
+    }
+
+    private void addControl(LinearLayout pane, MobileDevelopTools.Slider spec) {
         LinearLayout header = row();
-        header.addView(label(getString(spec.label()), 15, TEXT, false), new LinearLayout.LayoutParams(0, WRAP, 1));
+        header.addView(label(spec.label(), 15, TEXT, false), new LinearLayout.LayoutParams(0, WRAP, 1));
         TextView valueLabel = label("", 14, GOLD, false);
-        header.addView(valueLabel, lp(WRAP, WRAP));
-        pane.addView(header, lp(MATCH, WRAP));
+        header.addView(valueLabel, lp(WRAP, WRAP)); pane.addView(header, lp(MATCH, WRAP));
         SeekBar slider = new SeekBar(this);
-        slider.setContentDescription(getString(spec.label()));
+        slider.setContentDescription(spec.label());
         slider.setMax(spec.steps());
-        int p = toProgress(spec, settings.optDouble(spec.key(), spec.key().equals("wb.temp") ? 5500 : 0));
+        int p = spec.position(settings.optDouble(spec.key(), spec.initial()));
         slider.setProgress(p); slider.setMinimumHeight(dp(48)); slider.setEnabled(photoUsable);
         showValue(spec, p, valueLabel, slider);
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -495,26 +717,21 @@ public class MainActivity extends Activity {
             @Override public void onProgressChanged(SeekBar b, int n, boolean user) {
                 showValue(spec, n, valueLabel, slider);
                 if (!user || !photoUsable) return;
-                pendingEdits.put(spec.key(), spec.min()+spec.step()*n);
-                ui.removeCallbacks(adjustDelay);
-                ui.postDelayed(adjustDelay, 280);
+                pendingEdits.put(spec.key(), spec.value(n));
+                ui.removeCallbacks(adjustDelay); ui.postDelayed(adjustDelay, 320);
             }
             @Override public void onStopTrackingTouch(SeekBar b) { commitAdjustments(); }
         });
-        sliders.put(spec.key(), slider);
+        sliders.put(spec.key(), slider); sliderSpecs.put(spec.key(),spec);
         pane.addView(slider, lp(MATCH, dp(48)));
     }
 
-    private int toProgress(Control c, double value) {
-        return (int) Math.min(c.steps(), Math.max(0, Math.round((value-c.min()) / c.step())));
-    }
-
-    private void showValue(Control c, int n, TextView v, SeekBar slider) {
-        double value = c.min()+c.step()*n;
+    private void showValue(MobileDevelopTools.Slider spec, int n, TextView v, SeekBar slider) {
+        double value = spec.value(n);
         String formatted = String.format(getResources().getConfiguration().getLocales().get(0),
-            c.step() < 1 ? "%+.2f" : "%.0f", value);
+            ((value>0&&spec.min()<0) ? "%+." : "%.") + spec.decimals() + "f", value);
         v.setText(formatted);
-        slider.setStateDescription(getString(R.string.visible_value, getString(c.label()), formatted));
+        slider.setStateDescription(getString(R.string.visible_value, spec.label(), formatted));
     }
 
     private void drawSettings() {
@@ -609,19 +826,22 @@ public class MainActivity extends Activity {
         int start = reset ? 0 : photos.size();
         String wanted = query;
         listLoading = true;
-        work(0, () -> req("list", args("start", start, "query", wanted)), reply -> {
+        JSONObject filters = libraryTools.decorate(args("start",start,"query",wanted));
+        work(0, () -> req("list", filters), reply -> {
             if (ticket != listTicket || !"library".equals(screen)) return;
             listLoading = false;
-            if (reset) photos.clear();
+            if (reset) { photos.clear(); libraryRows.clear(); }
             JSONArray page = reply.optJSONArray("items");
             if (page != null) for (int i=0; i<page.length(); ++i) {
-                JSONObject p = page.optJSONObject(i); if (p != null) photos.add(Photo.read(p));
+                JSONObject p = page.optJSONObject(i);
+                if (p != null) { Photo photo = Photo.read(p); photos.add(photo); libraryRows.put(photo.id(),p); }
             }
             adapter.notifyDataSetChanged();
             if (reset && memoryGridRow > 0 && memoryGridRow < photos.size()) grid.setSelection(memoryGridRow);
             more.setVisibility(photos.size() < reply.optInt("total") ? View.VISIBLE : View.GONE);
-            empty.setText(wanted.trim().isEmpty() ? R.string.empty_title : R.string.no_results);
-            root.findViewWithTag("empty_body").setVisibility(wanted.trim().isEmpty() ? View.VISIBLE : View.GONE);
+            boolean filtered = libraryTools.isFiltered();
+            empty.setText(filtered ? R.string.ct_filter_empty : wanted.trim().isEmpty() ? R.string.empty_title : R.string.no_results);
+            root.findViewWithTag("empty_body").setVisibility(!filtered && wanted.trim().isEmpty() ? View.VISIBLE : View.GONE);
         }, e -> { if (ticket == listTicket && "library".equals(screen)) { listLoading=false; problem(e); } });
     }
 
@@ -638,6 +858,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == MobileLooks.REQUEST_IMPORT) { looks.onImportResult(result,data); return; }
         if (request == SAVE) {
             finishExport(result == RESULT_OK && data != null ? data.getData() : null);
             return;
@@ -688,10 +909,14 @@ public class MainActivity extends Activity {
     private void openPhoto() {
         if (selected == null || !ready) return;
         long id = selected.id(); stage(R.string.opening);
-        work(0, () -> req("metadata", args("id", id)), v -> {
+        work(0, () -> {
+            JSONObject v = req("metadata",args("id",id));
+            v.put("schema",req("controls",args("id",id)).getJSONArray("controls"));
+            return v;
+        }, v -> {
             if (!isEditing(id)) return;
-            settings = v; syncControls();
-            refreshPreview(id, true);
+            settings = v; controlSchema = v.optJSONArray("schema");
+            fillEditorPanel(); refreshPreview(id, true);
         }, error -> { if (isEditing(id)) problem(error); });
     }
 
@@ -715,11 +940,12 @@ public class MainActivity extends Activity {
 
     private void syncControls() {
         syncEditorActions();
-        Control[] group = "color".equals(section) ? COLOR : "detail".equals(section) ? DETAIL : LIGHT;
-        for (Control k : group) {
-            SeekBar b = sliders.get(k.key()); if (b == null) continue;
+        JSONObject current = advancedState();
+        for (Consumer<JSONObject> update : toggles.values()) update.accept(current);
+        for (MobileDevelopTools.Slider spec : sliderSpecs.values()) {
+            SeekBar b = sliders.get(spec.key()); if (b == null) continue;
             b.setEnabled(photoUsable);
-            b.setProgress(toProgress(k, settings.optDouble(k.key(), k.key().equals("wb.temp") ? 5500 : 0)));
+            b.setProgress(spec.position(pendingEdits.getOrDefault(spec.key(),settings.optDouble(spec.key(), spec.initial()))));
         }
     }
 
@@ -739,54 +965,62 @@ public class MainActivity extends Activity {
         if (selected == null || !photoUsable) return;
         commitAdjustments();
         long id = selected.id();
-        work(0, () -> req(op, args), values -> {
+        final boolean refreshSchema = "canvas_remove".equals(op) || "undo".equals(op) || "redo".equals(op) || "reset".equals(op)
+            || ("advanced".equals(op) && args.optString("tool").startsWith("color_"));
+        work(0, () -> {
+            JSONObject values = req(op,args);
+            if (refreshSchema) values.put("schema", req("controls",MainActivity.args("id",id)).getJSONArray("controls"));
+            return values;
+        }, values -> {
             invalidateThumbnail(id);
-            if (isEditing(id)) { invalidateBefore(); displayComparison(); settings=values; syncControls(); refreshPreview(id,false); }
+            if (isEditing(id)) {
+                invalidateBefore(); displayComparison(); settings=values;
+                if (refreshSchema) { controlSchema=values.optJSONArray("schema"); fillEditorPanel(); }
+                else syncControls();
+                refreshPreview(id,false);
+            }
         }, error -> { if (isEditing(id)) problem(error); });
     }
 
-    private void startExport() {
+    private int preferredEdge() { return new int[]{1280,2048,4096}[Math.max(0,Math.min(2,prefs.getInt("size",1)))]; }
+    private void startExport() { startExport(MobileExportTools.Options.quick(preferredEdge(),prefs.getInt("quality",90))); }
+    private void chooseExport() {
         if (!photoUsable || exporting || selected==null) return;
+        MobileExportTools.show(this,preferredEdge(),prefs.getInt("quality",90),this::startExport);
+    }
+
+    private void startExport(MobileExportTools.Options options) {
+        if (!photoUsable || exporting || selected==null || export==null) return;
         commitAdjustments();
         exporting=true; export.setEnabled(false); stage(R.string.rendering);
-        long id = selected.id();
-        String ticket = "Export-"+UUID.randomUUID()+".jpg";
-        String stem = selected.name().replaceFirst("\\.[^.]+$", "");
-        int[] edges={1280,2048,4096};
-        int index=Math.max(0,Math.min(2,prefs.getInt("size",1)));
-        work(0, () -> req("export",args("id",id,"file",ticket,"edge",edges[index],"quality",prefs.getInt("quality",90))), unused -> {
+        long id=selected.id();
+        String title=selected.name(), ticket=options.ticket();
+        work(0,() -> req("export_configured",options.args(id,ticket)), unused -> {
             if (!isEditing(id)) { new File(new File(getFilesDir(),"ExportQueue"),ticket).delete(); exporting=false; return; }
             pendingExport=ticket; clearStatus();
-            Intent create = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            create.setType("image/jpeg"); create.addCategory(Intent.CATEGORY_OPENABLE);
-            create.putExtra(Intent.EXTRA_TITLE, (stem.trim().isEmpty() ? "Photo" : stem) + "-edit.jpg");
-            create.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            try { startActivityForResult(create,SAVE); }
-            catch (RuntimeException error) { finishExport(null); problem(new LabEngine.Failure("export")); }
-        }, error -> { exporting=false; if(export!=null) export.setEnabled(photoUsable); problem(error); });
+            try { startActivityForResult(options.createDocument(title),SAVE); }
+            catch (RuntimeException e) { finishExport(null); problem(new LabEngine.Failure("export")); }
+        }, e -> { exporting=false; if(export!=null) export.setEnabled(photoUsable); problem(e); });
     }
 
     private void finishExport(Uri uri) {
         String ticket=pendingExport; pendingExport=null;
-        if (ticket==null || !ticket.matches("Export-[0-9a-f-]{36}\\.jpg")) return;
-        File f = new File(new File(getFilesDir(),"ExportQueue"),ticket);
+        if (!MobileExportTools.ticketIsValid(ticket)) return;
+        File f=new File(new File(getFilesDir(),"ExportQueue"),ticket);
         if (uri==null || !"content".equals(uri.getScheme())) {
             f.delete(); exporting=false;
             if(export!=null) export.setEnabled(photoUsable);
-            feedback(getString(R.string.cancelled), false); return;
+            feedback(getString(R.string.cancelled),false); return;
         }
         stage(R.string.saving);
-        work(0, () -> {
-            try (InputStream in=Files.newInputStream(f.toPath());
-                 OutputStream out=getContentResolver().openOutputStream(uri,"w")) {
-                if(out==null) throw new IOException();
-                Documents.transfer(in,out,Documents.MAX_FILE_BYTES);
-            } catch(IOException | RuntimeException error) { throw new LabEngine.Failure("export"); }
+        work(0,() -> {
+            try { MobileExportTools.writeNew(getContentResolver(),uri,f); }
+            catch (IOException | RuntimeException error) { throw new LabEngine.Failure("export_destination"); }
             finally { f.delete(); }
             return true;
         }, result -> {
             exporting=false; if(export!=null) export.setEnabled(photoUsable);
-            feedback(getString(R.string.saved),false);
+            feedback(ticket.endsWith(".jpg") ? getString(R.string.saved) : MobileExportTools.copySaved(this),false);
         }, error -> { exporting=false; if(export!=null) export.setEnabled(photoUsable); problem(error); });
     }
 
@@ -801,8 +1035,16 @@ public class MainActivity extends Activity {
         @Override public View getView(int p, View reuse, ViewGroup parent) {
             LinearLayout tile = reuse instanceof LinearLayout ? (LinearLayout) reuse : newTile();
             Photo photo=getItem(p); tile.setTag(photo.id());
-            ((TextView)tile.getChildAt(1)).setText(photo.name());
-            tile.setContentDescription(photo.name());
+            JSONObject row = libraryRows.get(photo.id());
+            String badge = row==null ? "" : MobileLibraryTools.badge(row);
+            int tint = row==null ? 0 : MobileLibraryTools.tint(row);
+            TextView name = (TextView)tile.getChildAt(1);
+            name.setText(badge.isEmpty() ? photo.name() : badge + " · " + photo.name());
+            name.setTextColor(tint == 0 ? TEXT : tint);
+            boolean chosen = libraryTools.isSelected(photo.id());
+            tile.setActivated(chosen);
+            tile.setBackground(shape(chosen ? 0xff586a8e : TILE,10));
+            tile.setContentDescription(name.getText());
             ImageView image=(ImageView)tile.getChildAt(0);
             Bitmap hit; synchronized(THUMBNAILS){hit=THUMBNAILS.get(photo.id());}
             image.setImageBitmap(hit);
@@ -856,12 +1098,17 @@ public class MainActivity extends Activity {
 
     private void problem(Throwable problem) {
         String code=problem instanceof LabEngine.Failure ? ((LabEngine.Failure)problem).code : "unavailable";
+        String exportWarning = MobileExportTools.error(this,code);
+        if (exportWarning != null) { feedback(exportWarning,true); return; }
         int message=switch(code){
             case "library" -> R.string.error_library;
             case "selection" -> R.string.error_selection;
             case "import" -> R.string.error_import;
             case "edit" -> R.string.error_edit;
             case "export" -> R.string.error_export;
+            case "look_import" -> R.string.look_error_import;
+            case "look_invalid" -> R.string.look_error_invalid;
+            case "look_clipboard" -> R.string.look_error_clipboard;
             case "unsupported" -> R.string.error_unsupported;
             case "nef_he" -> R.string.error_nef;
             default -> R.string.error_unavailable;

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="look_tools">Looks and history</string>
+    <string name="look_presets">Presets</string>
+    <string name="look_profiles">Profiles</string>
+    <string name="look_history">Edit history</string>
+    <string name="look_versions">Saved versions</string>
+    <string name="look_copy">Copy edit settings</string>
+    <string name="look_paste">Paste copied settings</string>
+    <string name="look_paste_previous">Paste from previous photo</string>
+    <string name="look_import">Import a preset or profile</string>
+    <string name="look_create_preset">Create preset</string>
+    <string name="look_preset_created">Preset saved.</string>
+    <string name="look_apply">Apply</string>
+    <string name="look_apply_amount">Apply at a different strength</string>
+    <string name="look_favorite">Add to favorites</string>
+    <string name="look_unfavorite">Remove from favorites</string>
+    <string name="look_amount">Strength</string>
+    <string name="look_percent">%1$d%%</string>
+    <string name="look_applied">Settings applied.</string>
+    <string name="look_copied">Edit settings copied inside Photo Lab.</string>
+    <string name="look_no_history">There are no edits for this photo yet.</string>
+    <string name="look_baseline">Before the first edit</string>
+    <string name="look_create_version">Save current version</string>
+    <string name="look_version_created">Version saved.</string>
+    <string name="look_restore_version">Restore this version</string>
+    <string name="look_rename_version">Rename this version</string>
+    <string name="look_update_version">Replace with current edits</string>
+    <string name="look_replace_version">Replace the contents of this saved version with the current edits?</string>
+    <string name="look_name">Name</string>
+    <string name="look_name_required">Enter a name</string>
+    <string name="look_choose_groups">Which settings?</string>
+    <string name="look_pick_group">Select at least one group.</string>
+    <string name="look_group_profile">Profile</string>
+    <string name="look_group_treatment">Color or black and white</string>
+    <string name="look_group_wb">White balance</string>
+    <string name="look_group_light">Light</string>
+    <string name="look_group_curve">Tone curve</string>
+    <string name="look_group_color">Color</string>
+    <string name="look_group_mixer">Color mixer</string>
+    <string name="look_group_grading">Color grading</string>
+    <string name="look_group_effects">Effects</string>
+    <string name="look_group_vignette">Vignette</string>
+    <string name="look_group_grain">Grain</string>
+    <string name="look_group_detail">Detail</string>
+    <string name="look_group_optics">Optics</string>
+    <string name="look_group_geometry">Geometry</string>
+    <string name="look_group_crop">Crop</string>
+    <string name="look_group_masks">Masks</string>
+    <string name="look_group_spots">Spot removal</string>
+    <string name="look_group_redeye">Red-eye correction</string>
+    <string name="look_group_blur">Lens blur</string>
+    <string name="look_group_calibration">Calibration</string>
+    <string name="look_import_info">Choose one .xmp, .lrtemplate, .lcpreset, .lceffect, .cube or .dcp file (up to 16 MB). The original document is not changed.</string>
+    <string name="look_choose_file">Choose file</string>
+    <string name="look_import_result">Profiles or presets added: %1$d
+Mask effects added: %2$d
+Duplicates skipped: %3$d
+Files or entries not imported: %4$d</string>
+    <string name="look_error_import">Cannot import this preset or profile. Check its format and size.</string>
+    <string name="look_error_invalid">This look or history action cannot be applied to the current photo.</string>
+    <string name="look_error_clipboard">Copy edit settings from a photo first.</string>
+</resources>

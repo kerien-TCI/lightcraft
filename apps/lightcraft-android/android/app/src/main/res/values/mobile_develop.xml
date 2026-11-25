@@ -1,0 +1,33 @@
+<resources>
+    <string name="mobile_tools">Tools</string>
+    <string name="mobile_more_tools">Develop tools</string>
+    <string name="mobile_basic_tools">Basic tools</string>
+    <string name="mobile_automatic">Auto settings</string>
+    <string name="mobile_point_curves">Edit RGB point curves</string>
+    <string name="mobile_masks">Masking</string>
+    <string name="mobile_remove">Remove and heal</string>
+    <string name="mobile_free_crop">Free crop with touch</string>
+    <string name="mobile_looks">Presets, profiles and versions</string>
+    <string name="mobile_reset_group">Reset this panel</string>
+    <string name="mobile_group_enabled">Enable this section</string>
+    <string name="mobile_upright">Perspective correction</string>
+    <string name="mobile_ca">Remove chromatic aberration</string>
+    <string name="mobile_embedded_lens">Enable available lens profile</string>
+    <string name="mobile_no_lens">No embedded correction or matching lens profile for this photo. Manual corrections still work.</string>
+    <string name="mobile_constrain_crop">Constrain crop</string>
+    <string name="mobile_bw">Black and white</string>
+    <string name="mobile_auto_bw">Auto black-and-white mix</string>
+    <string name="mobile_hot_pixels">Remove hot pixels (RAW)</string>
+    <string name="mobile_hdr_enable">Enable HDR processing</string>
+    <string name="mobile_hdr_preview">The phone preview remains SDR. These controls adjust the HDR headroom and its SDR rendition.</string>
+    <string name="mobile_blur_enable">Enable lens blur</string>
+    <string name="mobile_blur_shape">Focus shape</string>
+    <string name="mobile_wb">White balance preset</string>
+    <string name="mobile_wb_pick">Sample a neutral point</string>
+    <string name="mobile_color_pick">Sample a color</string>
+    <string name="mobile_color_delete">Remove a color sample</string>
+    <string name="mobile_sample_tip">Tap the photo to choose a point.</string>
+    <string name="mobile_preview_wait">Wait for the photo and its tools to load.</string>
+    <string name="mobile_organize">Organize photo</string>
+    <string name="mobile_export_options">Export options</string>
+</resources>
